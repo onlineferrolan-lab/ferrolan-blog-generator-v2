@@ -164,12 +164,12 @@ Genera el artículo completo siguiendo todas las instrucciones de estilo editori
 
     const text = message.content[0]?.text || "";
 
-    // 3. Guardar el artículo generado en KV (no bloquea la respuesta si falla)
-    await saveArticle(tema, categoria, text);
+    // Ya no se guarda automáticamente — el usuario decide cuándo publicar
+    // vía /api/save-article
 
     return res.status(200).json({
       articulo: text,
-      historialCount: history.length, // info útil para debug
+      historialCount: history.length,
     });
   } catch (err) {
     console.error("Anthropic error:", err);
