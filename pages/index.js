@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Head from "next/head";
 
 const CATEGORIAS = [
@@ -14,7 +14,8 @@ const TONOS = [
   "Guía práctica paso a paso",
 ];
 
-const EJEMPLOS = [
+// Fallback examples when GSC data is not loaded yet
+const EJEMPLOS_FALLBACK = [
   { tema: "Tendencias en pavimentos exteriores para 2026", categoria: "Espacios exteriores", keywords: "pavimento exterior, antideslizante, porcelánico, terraza" },
   { tema: "Cómo elegir el mejor adhesivo para cerámica", categoria: "Consejos", keywords: "adhesivo cerámica, colas, colocación azulejos" },
   { tema: "Cocinas de diseño nórdico: materiales y acabados", categoria: "Cocinas", keywords: "cocina nórdica, madera, blanco, encimera" },
@@ -30,13 +31,10 @@ const LIGHT = {
   orange: "#D97706", orangeLight: "#FFFBEB",
   blue: "#2563EB", blueLight: "#EFF6FF", blueBorder: "#BFDBFE",
   panelHeader: "#2D2D2D", panelHeaderText: "#FFFFFF",
-  bg: "#F3F3F3",
-  cardBg: "#FFFFFF",
-  inputBg: "#FFFFFF",
-  inputBorder: "#E5E5E5",
+  bg: "#F3F3F3", cardBg: "#FFFFFF", inputBg: "#FFFFFF", inputBorder: "#E5E5E5",
 };
 
-const DARK = {
+const DARK_THEME = {
   red: "#EF4444", redDark: "#DC2626", redLight: "#1C1517", redBorder: "#7F1D1D",
   dark: "#F1F1F1", mid: "#CCCCCC", light: "#1E1E1E",
   border: "#333333", white: "#171717", muted: "#777777",
@@ -44,11 +42,68 @@ const DARK = {
   orange: "#FBBF24", orangeLight: "#1C1A0E",
   blue: "#60A5FA", blueLight: "#0F172A", blueBorder: "#1E3A5F",
   panelHeader: "#111111", panelHeaderText: "#F1F1F1",
-  bg: "#0F0F0F",
-  cardBg: "#171717",
-  inputBg: "#1E1E1E",
-  inputBorder: "#333333",
+  bg: "#0F0F0F", cardBg: "#171717", inputBg: "#1E1E1E", inputBorder: "#333333",
 };
+
+// ─── Generate smart examples from GSC data ──────────────────────────────────
+
+function generateExamplesFromGSC(gscData) {
+  if (!gscData) return EJEMPLOS_FALLBACK;
+
+  // Pool all items from all tabs
+  const pool = [];
+
+  (gscData.oportunidades || []).forEach((item) => {
+    pool.push({
+      tema: item.sugerencia || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
+      categoria: item.categoria || "",
+      keywords: item.query,
+      source: "oportunidad",
+      impresiones: item.impresiones,
+    });
+  });
+
+  (gscData.nuevosTemasGSC || []).forEach((item) => {
+    pool.push({
+      tema: item.sugerencia || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
+      categoria: item.categoria || "",
+      keywords: item.query,
+      source: "nuevo",
+      impresiones: item.impresiones,
+    });
+  });
+
+  (gscData.quickWins || []).forEach((item) => {
+    pool.push({
+      tema: item.nota || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
+      categoria: item.categoria || "",
+      keywords: item.query,
+      source: "quickwin",
+      impresiones: item.impresiones,
+    });
+  });
+
+  if (pool.length < 3) return EJEMPLOS_FALLBACK;
+
+  // Weighted random selection — higher impressions = higher chance
+  const pick = (arr, count) => {
+    const result = [];
+    const remaining = [...arr];
+    for (let i = 0; i < count && remaining.length > 0; i++) {
+      const totalWeight = remaining.reduce((s, x) => s + (x.impresiones || 100), 0);
+      let r = Math.random() * totalWeight;
+      let idx = 0;
+      for (let j = 0; j < remaining.length; j++) {
+        r -= remaining[j].impresiones || 100;
+        if (r <= 0) { idx = j; break; }
+      }
+      result.push(remaining.splice(idx, 1)[0]);
+    }
+    return result;
+  };
+
+  return pick(pool, 3);
+}
 
 // ─── Theme Toggle ───────────────────────────────────────────────────────────
 
@@ -65,8 +120,7 @@ function ThemeToggle({ isDark, onToggle }) {
         left: isDark ? 23 : 3, transition: "left 0.25s ease",
         background: isDark ? "#F59E0B" : "#FFFFFF",
         boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "0.55rem",
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.55rem",
       }}>
         {isDark ? "☀" : "🌙"}
       </div>
@@ -83,12 +137,10 @@ function MarkdownRenderer({ content, C }) {
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g,
         `<a href="https://ferrolan.es$2" style="color:${C.red};text-decoration:underline;font-weight:600" target="_blank">$1</a>`
       );
-
   const lines = content.split("\n");
   const elements = [];
   let listItems = [];
   let key = 0;
-
   const flushList = () => {
     if (listItems.length > 0) {
       elements.push(
@@ -102,29 +154,14 @@ function MarkdownRenderer({ content, C }) {
       listItems = [];
     }
   };
-
   lines.forEach((line, i) => {
-    if (line.startsWith("# ")) {
-      flushList();
-      elements.push(<h1 key={i} style={{ fontSize: "1.7rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", lineHeight: 1.2, margin: "0 0 1.2rem", borderLeft: `4px solid ${C.red}`, paddingLeft: "1rem" }}>{line.slice(2)}</h1>);
-    } else if (line.startsWith("## ")) {
-      flushList();
-      elements.push(<h2 key={i} style={{ fontSize: "1.2rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", margin: "2em 0 0.7em", textTransform: "uppercase", letterSpacing: "0.04em" }}><span style={{ color: C.red, marginRight: "0.5rem" }}>▸</span>{line.slice(3)}</h2>);
-    } else if (line.startsWith("### ")) {
-      flushList();
-      elements.push(<h3 key={i} style={{ fontSize: "1rem", fontWeight: 700, color: C.mid, margin: "1.2em 0 0.4em", textTransform: "uppercase", letterSpacing: "0.05em" }}>{line.slice(4)}</h3>);
-    } else if (line.startsWith("- ")) {
-      listItems.push(parseInline(line.slice(2)));
-    } else if (line === "---") {
-      flushList();
-      elements.push(<hr key={i} style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "2.2em 0" }} />);
-    } else if (line.trim() === "") {
-      flushList();
-      elements.push(<div key={i} style={{ height: "0.5em" }} />);
-    } else {
-      flushList();
-      elements.push(<p key={i} style={{ lineHeight: 1.8, color: C.mid, margin: "0 0 0.85em", fontSize: "1.02rem" }} dangerouslySetInnerHTML={{ __html: parseInline(line) }} />);
-    }
+    if (line.startsWith("# ")) { flushList(); elements.push(<h1 key={i} style={{ fontSize: "1.7rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", lineHeight: 1.2, margin: "0 0 1.2rem", borderLeft: `4px solid ${C.red}`, paddingLeft: "1rem" }}>{line.slice(2)}</h1>); }
+    else if (line.startsWith("## ")) { flushList(); elements.push(<h2 key={i} style={{ fontSize: "1.2rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", margin: "2em 0 0.7em", textTransform: "uppercase", letterSpacing: "0.04em" }}><span style={{ color: C.red, marginRight: "0.5rem" }}>▸</span>{line.slice(3)}</h2>); }
+    else if (line.startsWith("### ")) { flushList(); elements.push(<h3 key={i} style={{ fontSize: "1rem", fontWeight: 700, color: C.mid, margin: "1.2em 0 0.4em", textTransform: "uppercase", letterSpacing: "0.05em" }}>{line.slice(4)}</h3>); }
+    else if (line.startsWith("- ")) { listItems.push(parseInline(line.slice(2))); }
+    else if (line === "---") { flushList(); elements.push(<hr key={i} style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "2.2em 0" }} />); }
+    else if (line.trim() === "") { flushList(); elements.push(<div key={i} style={{ height: "0.5em" }} />); }
+    else { flushList(); elements.push(<p key={i} style={{ lineHeight: 1.8, color: C.mid, margin: "0 0 0.85em", fontSize: "1.02rem" }} dangerouslySetInnerHTML={{ __html: parseInline(line) }} />); }
   });
   flushList();
   return <div>{elements}</div>;
@@ -142,18 +179,11 @@ function ImagePanel({ imagenes, loadingImages, onGenerate, hasArticle, C }) {
           <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Imágenes del artículo</span>
         </div>
         {!loadingImages && imagenes.length === 0 && (
-          <button onClick={onGenerate}
-            style={{ background: C.red, color: "#FFF", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}
-            onMouseOver={e => e.currentTarget.style.background = C.redDark}
-            onMouseOut={e => e.currentTarget.style.background = C.red}>
-            Generar imágenes
-          </button>
+          <button onClick={onGenerate} style={{ background: C.red, color: "#FFF", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}
+            onMouseOver={e => e.currentTarget.style.background = C.redDark} onMouseOut={e => e.currentTarget.style.background = C.red}>Generar imágenes</button>
         )}
         {imagenes.length > 0 && (
-          <button onClick={onGenerate}
-            style={{ background: "rgba(255,255,255,0.12)", color: "#CCC", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontWeight: 600 }}>
-            ↺ Regenerar
-          </button>
+          <button onClick={onGenerate} style={{ background: "rgba(255,255,255,0.12)", color: "#CCC", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontWeight: 600 }}>↺ Regenerar</button>
         )}
       </div>
       <div style={{ padding: "1.5rem" }}>
@@ -173,13 +203,10 @@ function ImagePanel({ imagenes, loadingImages, onGenerate, hasArticle, C }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
             {imagenes.map((img, i) => (
               <div key={i}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem", fontFamily: "'Oswald', sans-serif" }}>
-                  {i === 0 ? "Imagen ambiente" : "Detalle de material"}
-                </div>
+                <div style={{ fontSize: "0.78rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem", fontFamily: "'Oswald', sans-serif" }}>{i === 0 ? "Imagen ambiente" : "Detalle de material"}</div>
                 <img src={img.src} alt={img.descripcion} style={{ width: "100%", borderRadius: 10, display: "block", border: `1px solid ${C.border}` }} />
                 <div style={{ fontSize: "0.85rem", color: C.muted, marginTop: "0.5rem", lineHeight: 1.5, fontStyle: "italic" }}>{img.descripcion}</div>
-                <a href={img.src} download={`ferrolan-imagen-${i + 1}.png`}
-                  style={{ display: "inline-block", marginTop: "0.5rem", fontSize: "0.85rem", color: C.red, fontWeight: 600, textDecoration: "none" }}>↓ Descargar</a>
+                <a href={img.src} download={`ferrolan-imagen-${i + 1}.png`} style={{ display: "inline-block", marginTop: "0.5rem", fontSize: "0.85rem", color: C.red, fontWeight: 600, textDecoration: "none" }}>↓ Descargar</a>
               </div>
             ))}
           </div>
@@ -191,22 +218,8 @@ function ImagePanel({ imagenes, loadingImages, onGenerate, hasArticle, C }) {
 
 // ─── GSC Dashboard Panel ────────────────────────────────────────────────────
 
-function GSCPanel({ onSelectTopic, C }) {
-  const [gscData, setGscData] = useState(null);
-  const [gscLoading, setGscLoading] = useState(true);
-  const [gscError, setGscError] = useState("");
+function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }) {
   const [activeGscTab, setActiveGscTab] = useState("oportunidades");
-
-  const fetchGSC = async () => {
-    setGscLoading(true); setGscError("");
-    try {
-      const res = await fetch("/api/gsc-data");
-      setGscData(await res.json());
-    } catch { setGscError("Error cargando datos GSC"); }
-    setGscLoading(false);
-  };
-
-  useEffect(() => { fetchGSC(); }, []);
 
   const tabStyle = (tab) => ({
     padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
@@ -231,9 +244,7 @@ function GSCPanel({ onSelectTopic, C }) {
       onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.query}</span>
-        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: badgeColor, background: badgeBg, padding: "0.15rem 0.5rem", borderRadius: 6, whiteSpace: "nowrap" }}>
-          {badge}
-        </span>
+        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: badgeColor, background: badgeBg, padding: "0.15rem 0.5rem", borderRadius: 6, whiteSpace: "nowrap" }}>{badge}</span>
       </div>
       <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.82rem", color: C.muted }}>
         <span>{formatNum(item.impresiones)} impr</span>
@@ -246,7 +257,6 @@ function GSCPanel({ onSelectTopic, C }) {
 
   return (
     <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-      {/* Header */}
       <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
@@ -258,7 +268,7 @@ function GSCPanel({ onSelectTopic, C }) {
               {gscData.live ? "● LIVE" : "● ESTÁTICO"}
             </span>
           )}
-          <button onClick={fetchGSC} disabled={gscLoading}
+          <button onClick={onRefresh} disabled={gscLoading}
             style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
             title="Actualizar datos">↺</button>
         </div>
@@ -271,14 +281,11 @@ function GSCPanel({ onSelectTopic, C }) {
             <div style={{ fontSize: "0.9rem", color: C.muted }}>Cargando datos GSC...</div>
           </div>
         )}
-
         {gscError && !gscLoading && (
           <div style={{ background: C.redLight, borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.9rem", color: C.red }}>⚠ {gscError}</div>
         )}
-
         {gscData && !gscLoading && (
           <>
-            {/* Stats */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1rem" }}>
               {[["Clics", formatNum(gscData.resumen.clics)], ["Impresiones", formatNum(gscData.resumen.impresiones)], ["CTR medio", gscData.resumen.ctr + "%"], ["Posición", gscData.resumen.posicion]].map(([label, value], i) => (
                 <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.85rem", textAlign: "center", border: `1px solid ${C.border}` }}>
@@ -289,21 +296,18 @@ function GSCPanel({ onSelectTopic, C }) {
             </div>
             <div style={{ fontSize: "0.78rem", color: C.muted, textAlign: "center", marginBottom: "1rem" }}>{gscData.resumen.periodo}</div>
 
-            {/* Tabs */}
             <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: C.panelHeader, borderRadius: 8, padding: "0.2rem" }}>
               {[["oportunidades", "Oportunidades"], ["quickwins", "Quick Wins"], ["nuevos", "Nuevos"], ["articulos", "Artículos"]].map(([key, label]) => (
                 <button key={key} onClick={() => setActiveGscTab(key)} style={tabStyle(key)}>{label}</button>
               ))}
             </div>
 
-            {/* Tab: Oportunidades */}
             {activeGscTab === "oportunidades" && (
               <div>
                 <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.5 }}>Alto volumen, posición mejorable. Clic para generar artículo.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                   {(gscData.oportunidades || []).map((item, i) => (
-                    <KWCard key={i} item={item} bg={C.cardBg} borderColor={C.border}
-                      hoverShadow={`0 2px 12px ${C.red}20`}
+                    <KWCard key={i} item={item} bg={C.cardBg} borderColor={C.border} hoverShadow={`0 2px 12px ${C.red}20`}
                       badge={`pos ${item.posicion}`} badgeColor={posColor(item.posicion)} badgeBg={`${posColor(item.posicion)}18`}
                       extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.mid, fontStyle: "italic" } } : null} />
                   ))}
@@ -311,14 +315,12 @@ function GSCPanel({ onSelectTopic, C }) {
               </div>
             )}
 
-            {/* Tab: Quick Wins */}
             {activeGscTab === "quickwins" && (
               <div>
                 <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.5 }}>Ya bien posicionados — mantener y reforzar.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                   {(gscData.quickWins || []).map((item, i) => (
-                    <KWCard key={i} item={{ ...item, sugerencia: item.nota }} bg={C.greenLight} borderColor={C.greenBorder}
-                      hoverShadow={`0 2px 12px ${C.green}20`}
+                    <KWCard key={i} item={{ ...item, sugerencia: item.nota }} bg={C.greenLight} borderColor={C.greenBorder} hoverShadow={`0 2px 12px ${C.green}20`}
                       badge={`✓ pos ${item.posicion}`} badgeColor={C.green} badgeBg={`${C.green}18`}
                       extra={item.nota ? { text: `✦ ${item.nota}`, style: { color: C.green, fontWeight: 600 } } : null} />
                   ))}
@@ -326,14 +328,12 @@ function GSCPanel({ onSelectTopic, C }) {
               </div>
             )}
 
-            {/* Tab: Nuevos Temas */}
             {activeGscTab === "nuevos" && (
               <div>
                 <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.5 }}>Keywords con demanda sin artículo dedicado. Clic para crear uno.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                   {(gscData.nuevosTemasGSC || []).map((item, i) => (
-                    <KWCard key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder}
-                      hoverShadow={`0 2px 12px ${C.blue}20`}
+                    <KWCard key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder} hoverShadow={`0 2px 12px ${C.blue}20`}
                       badge={`${formatNum(item.impresiones)} impr`} badgeColor={C.blue} badgeBg={`${C.blue}18`}
                       extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.blue, fontWeight: 600 } } : null} />
                   ))}
@@ -341,7 +341,6 @@ function GSCPanel({ onSelectTopic, C }) {
               </div>
             )}
 
-            {/* Tab: Artículos */}
             {activeGscTab === "articulos" && (
               <div>
                 <p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.5 }}>Artículos del blog con más impresiones. Revisar periódicamente.</p>
@@ -395,7 +394,33 @@ export default function Home() {
   const [imageError, setImageError] = useState("");
   const [isDark, setIsDark] = useState(false);
 
-  const C = isDark ? DARK : LIGHT;
+  // GSC data — lifted to parent so examples and panel share it
+  const [gscData, setGscData] = useState(null);
+  const [gscLoading, setGscLoading] = useState(true);
+  const [gscError, setGscError] = useState("");
+
+  // Dynamic examples from GSC
+  const [ejemplos, setEjemplos] = useState(EJEMPLOS_FALLBACK);
+
+  const C = isDark ? DARK_THEME : LIGHT;
+
+  const fetchGSC = useCallback(async () => {
+    setGscLoading(true); setGscError("");
+    try {
+      const res = await fetch("/api/gsc-data");
+      const data = await res.json();
+      setGscData(data);
+      // Generate initial examples when data arrives
+      setEjemplos(generateExamplesFromGSC(data));
+    } catch { setGscError("Error cargando datos GSC"); }
+    setGscLoading(false);
+  }, []);
+
+  useEffect(() => { fetchGSC(); }, [fetchGSC]);
+
+  const refreshExamples = () => {
+    setEjemplos(generateExamplesFromGSC(gscData));
+  };
 
   const handleSelectTopic = ({ tema: t, categoria: c, keywords: k }) => {
     setTema(t);
@@ -443,6 +468,14 @@ export default function Home() {
   const inputStyle = { width: "100%", border: `1px solid ${C.inputBorder}`, borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", color: C.dark, background: C.inputBg };
   const labelStyle = { fontSize: "0.82rem", fontWeight: 700, color: C.dark, display: "block", marginBottom: "0.45rem", textTransform: "uppercase", letterSpacing: "0.05em" };
 
+  // Source badge color for examples
+  const sourceStyle = (source) => {
+    if (source === "oportunidad") return { bg: `${C.red}15`, color: C.red, label: "Oportunidad" };
+    if (source === "nuevo") return { bg: `${C.blue}15`, color: C.blue, label: "Nuevo tema" };
+    if (source === "quickwin") return { bg: `${C.green}15`, color: C.green, label: "Quick Win" };
+    return { bg: C.light, color: C.muted, label: "Sugerencia" };
+  };
+
   return (
     <>
       <Head>
@@ -481,7 +514,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Subheader bar */}
       <div style={{ background: C.red, padding: "0.45rem 2.5rem" }}>
         <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + Gemini Imagen 3 · Panel Google Search Console</p>
       </div>
@@ -492,25 +524,44 @@ export default function Home() {
         {/* ─── LEFT: FORM ─── */}
         <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem" }}>
           <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
-            {/* Dark header */}
             <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Configurar artículo</span>
             </div>
 
             <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {/* Quick examples */}
+              {/* Dynamic GSC-powered examples */}
               <div>
-                <div style={{ ...labelStyle, color: C.muted, marginBottom: "0.5rem" }}>Ejemplos rápidos</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <div style={{ ...labelStyle, color: C.muted, marginBottom: 0 }}>
+                    Sugerencias GSC
+                  </div>
+                  <button onClick={refreshExamples} title="Nuevas sugerencias"
+                    style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 6, width: 28, height: 28, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}>
+                    ↺
+                  </button>
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                  {EJEMPLOS.map((ej, i) => (
-                    <button key={i} onClick={() => { setTema(ej.tema); setCategoria(ej.categoria); setKeywords(ej.keywords); }}
-                      style={{ display: "block", width: "100%", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.55rem 0.85rem", textAlign: "left", cursor: "pointer", fontSize: "0.88rem", color: C.red, lineHeight: 1.4, fontFamily: "inherit", fontWeight: 500 }}
-                      onMouseOver={e => e.currentTarget.style.borderColor = C.red}
-                      onMouseOut={e => e.currentTarget.style.borderColor = C.redBorder}>
-                      {ej.tema}
-                    </button>
-                  ))}
+                  {ejemplos.map((ej, i) => {
+                    const s = sourceStyle(ej.source);
+                    return (
+                      <button key={`${ej.tema}-${i}`} onClick={() => { setTema(ej.tema); if (ej.categoria) setCategoria(ej.categoria); setKeywords(ej.keywords || ""); }}
+                        style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", width: "100%", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.55rem 0.85rem", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                        onMouseOver={e => e.currentTarget.style.borderColor = C.red}
+                        onMouseOut={e => e.currentTarget.style.borderColor = C.redBorder}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "0.88rem", color: C.red, lineHeight: 1.4, fontWeight: 500 }}>{ej.tema}</div>
+                          {ej.source && (
+                            <span style={{ display: "inline-block", marginTop: "0.25rem", fontSize: "0.65rem", fontWeight: 700, color: s.color, background: s.bg, padding: "0.1rem 0.4rem", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                              {s.label}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -598,7 +649,6 @@ export default function Home() {
           {articulo && (
             <div className="articulo-panel">
               <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
-                {/* Toolbar */}
                 <div style={{ background: C.panelHeader, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", gap: "0.2rem" }}>
                     {[["preview", "Vista previa"], ["markdown", "Markdown"]].map(([val, label]) => (
@@ -614,7 +664,6 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* Content */}
                 <div style={{ padding: "2.5rem 3rem", maxHeight: "70vh", overflowY: "auto" }}>
                   {activeTab === "preview"
                     ? <MarkdownRenderer content={articulo} C={C} />
@@ -622,7 +671,6 @@ export default function Home() {
                   }
                 </div>
 
-                {/* Bottom bar */}
                 <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", background: C.light }}>
                   <button onClick={generarArticulo}
                     style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
@@ -645,7 +693,7 @@ export default function Home() {
 
         {/* ─── RIGHT: GSC PANEL ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
-          <GSCPanel onSelectTopic={handleSelectTopic} C={C} />
+          <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
         </div>
 
       </div>
