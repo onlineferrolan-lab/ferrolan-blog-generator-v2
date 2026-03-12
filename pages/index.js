@@ -14,7 +14,6 @@ const TONOS = [
   "Guía práctica paso a paso",
 ];
 
-// Fallback examples when GSC data is not loaded yet
 const EJEMPLOS_FALLBACK = [
   { tema: "Tendencias en pavimentos exteriores para 2026", categoria: "Espacios exteriores", keywords: "pavimento exterior, antideslizante, porcelánico, terraza" },
   { tema: "Cómo elegir el mejor adhesivo para cerámica", categoria: "Consejos", keywords: "adhesivo cerámica, colas, colocación azulejos" },
@@ -45,19 +44,81 @@ const DARK_THEME = {
   bg: "#0F0F0F", cardBg: "#171717", inputBg: "#1E1E1E", inputBorder: "#333333",
 };
 
+// ─── Article title generator ────────────────────────────────────────────────
+// Transforms raw GSC keywords into editorial-style article titles
+
+const TITLE_PATTERNS = {
+  guia: [
+    "Guía completa de {kw}: tipos, usos y cómo elegir",
+    "{Kw}: guía definitiva para acertar en tu proyecto",
+    "Todo lo que necesitas saber sobre {kw}",
+    "{Kw}: la guía que todo profesional debería leer",
+  ],
+  comparativa: [
+    "{Kw}: ventajas, inconvenientes y alternativas",
+    "{Kw} vs las alternativas más populares del mercado",
+    "Comparativa de {kw}: ¿cuál es la mejor opción?",
+    "{Kw}: diferencias clave que debes conocer antes de decidir",
+  ],
+  tips: [
+    "Los 7 errores más comunes al elegir {kw}",
+    "Cómo elegir {kw} sin equivocarte: consejos de experto",
+    "5 claves para acertar con {kw} en tu reforma",
+    "{Kw}: lo que nadie te cuenta antes de comprar",
+  ],
+  tendencias: [
+    "Tendencias en {kw} para 2026: lo que viene este año",
+    "{Kw}: las novedades que están marcando tendencia",
+    "Así se usa {kw} en los proyectos más actuales",
+    "{Kw} en 2026: ideas que inspiran",
+  ],
+  tutorial: [
+    "Cómo instalar {kw} paso a paso",
+    "{Kw}: instalación, mantenimiento y consejos prácticos",
+    "Cómo trabajar con {kw}: guía práctica",
+    "{Kw}: todo sobre su colocación y cuidado",
+  ],
+  inspiracion: [
+    "10 ideas con {kw} que transformarán tu espacio",
+    "{Kw}: inspiración para tu próximo proyecto",
+    "Proyectos reales con {kw} que querrás copiar",
+    "Cómo usar {kw} para renovar cualquier estancia",
+  ],
+};
+
+function generateArticleTitle(keyword, source) {
+  // Capitalize first letter of keyword for inline use
+  const kw = keyword.toLowerCase();
+  const Kw = kw.charAt(0).toUpperCase() + kw.slice(1);
+
+  // Pick pattern group based on source or random
+  let groups;
+  if (source === "nuevo") {
+    groups = ["guia", "tutorial", "tips"];
+  } else if (source === "quickwin") {
+    groups = ["tendencias", "inspiracion", "comparativa"];
+  } else {
+    groups = ["guia", "comparativa", "tips", "tendencias", "tutorial", "inspiracion"];
+  }
+
+  const group = groups[Math.floor(Math.random() * groups.length)];
+  const patterns = TITLE_PATTERNS[group];
+  const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+
+  return pattern.replace(/\{kw\}/g, kw).replace(/\{Kw\}/g, Kw);
+}
+
 // ─── Generate smart examples from GSC data ──────────────────────────────────
 
 function generateExamplesFromGSC(gscData) {
   if (!gscData) return EJEMPLOS_FALLBACK;
 
-  // Pool all items from all tabs
   const pool = [];
 
   (gscData.oportunidades || []).forEach((item) => {
     pool.push({
-      tema: item.sugerencia || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
-      categoria: item.categoria || "",
       keywords: item.query,
+      categoria: item.categoria || "",
       source: "oportunidad",
       impresiones: item.impresiones,
     });
@@ -65,9 +126,8 @@ function generateExamplesFromGSC(gscData) {
 
   (gscData.nuevosTemasGSC || []).forEach((item) => {
     pool.push({
-      tema: item.sugerencia || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
-      categoria: item.categoria || "",
       keywords: item.query,
+      categoria: item.categoria || "",
       source: "nuevo",
       impresiones: item.impresiones,
     });
@@ -75,9 +135,8 @@ function generateExamplesFromGSC(gscData) {
 
   (gscData.quickWins || []).forEach((item) => {
     pool.push({
-      tema: item.nota || (item.query.charAt(0).toUpperCase() + item.query.slice(1)),
-      categoria: item.categoria || "",
       keywords: item.query,
+      categoria: item.categoria || "",
       source: "quickwin",
       impresiones: item.impresiones,
     });
@@ -85,7 +144,7 @@ function generateExamplesFromGSC(gscData) {
 
   if (pool.length < 3) return EJEMPLOS_FALLBACK;
 
-  // Weighted random selection — higher impressions = higher chance
+  // Weighted random selection
   const pick = (arr, count) => {
     const result = [];
     const remaining = [...arr];
@@ -102,7 +161,13 @@ function generateExamplesFromGSC(gscData) {
     return result;
   };
 
-  return pick(pool, 3);
+  return pick(pool, 3).map((item) => ({
+    tema: generateArticleTitle(item.keywords, item.source),
+    categoria: item.categoria,
+    keywords: item.keywords,
+    source: item.source,
+    impresiones: item.impresiones,
+  }));
 }
 
 // ─── Theme Toggle ───────────────────────────────────────────────────────────
@@ -273,7 +338,6 @@ function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }
             title="Actualizar datos">↺</button>
         </div>
       </div>
-
       <div style={{ padding: "1.25rem 1.25rem", maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
         {gscLoading && (
           <div style={{ textAlign: "center", padding: "3rem 1rem" }}>
@@ -393,13 +457,9 @@ export default function Home() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
   const [isDark, setIsDark] = useState(false);
-
-  // GSC data — lifted to parent so examples and panel share it
   const [gscData, setGscData] = useState(null);
   const [gscLoading, setGscLoading] = useState(true);
   const [gscError, setGscError] = useState("");
-
-  // Dynamic examples from GSC
   const [ejemplos, setEjemplos] = useState(EJEMPLOS_FALLBACK);
 
   const C = isDark ? DARK_THEME : LIGHT;
@@ -410,7 +470,6 @@ export default function Home() {
       const res = await fetch("/api/gsc-data");
       const data = await res.json();
       setGscData(data);
-      // Generate initial examples when data arrives
       setEjemplos(generateExamplesFromGSC(data));
     } catch { setGscError("Error cargando datos GSC"); }
     setGscLoading(false);
@@ -418,14 +477,10 @@ export default function Home() {
 
   useEffect(() => { fetchGSC(); }, [fetchGSC]);
 
-  const refreshExamples = () => {
-    setEjemplos(generateExamplesFromGSC(gscData));
-  };
+  const refreshExamples = () => { setEjemplos(generateExamplesFromGSC(gscData)); };
 
   const handleSelectTopic = ({ tema: t, categoria: c, keywords: k }) => {
-    setTema(t);
-    if (c) setCategoria(c);
-    if (k) setKeywords(k);
+    setTema(t); if (c) setCategoria(c); if (k) setKeywords(k);
     document.querySelector(".form-column")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -433,10 +488,7 @@ export default function Home() {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError("");
     try {
-      const res = await fetch("/api/generate", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, keywords, tono, notas }),
-      });
+      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, keywords, tono, notas }) });
       const data = await res.json();
       if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); }
       else setError(data.error || "Error al generar el artículo.");
@@ -448,10 +500,7 @@ export default function Home() {
     if (!articulo) return;
     setLoadingImages(true); setImagenes([]); setImageError("");
     try {
-      const res = await fetch("/api/generate-images", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, articleText: articulo }),
-      });
+      const res = await fetch("/api/generate-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, articleText: articulo }) });
       const data = await res.json();
       if (data.imagenes) setImagenes(data.imagenes);
       else setImageError(data.error || "Error generando imágenes.");
@@ -459,16 +508,11 @@ export default function Home() {
     setLoadingImages(false);
   };
 
-  const copiarMarkdown = () => {
-    navigator.clipboard.writeText(articulo);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2200);
-  };
+  const copiarMarkdown = () => { navigator.clipboard.writeText(articulo); setCopied(true); setTimeout(() => setCopied(false), 2200); };
 
   const inputStyle = { width: "100%", border: `1px solid ${C.inputBorder}`, borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", color: C.dark, background: C.inputBg };
   const labelStyle = { fontSize: "0.82rem", fontWeight: 700, color: C.dark, display: "block", marginBottom: "0.45rem", textTransform: "uppercase", letterSpacing: "0.05em" };
 
-  // Source badge color for examples
   const sourceStyle = (source) => {
     if (source === "oportunidad") return { bg: `${C.red}15`, color: C.red, label: "Oportunidad" };
     if (source === "nuevo") return { bg: `${C.blue}15`, color: C.blue, label: "Nuevo tema" };
@@ -498,14 +542,12 @@ export default function Home() {
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${isDark ? "#333" : "#DDD"}; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: ${isDark ? "#555" : "#BBB"}; }
         @media (max-width: 1200px) {
           .main-grid { grid-template-columns: 1fr !important; }
           .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
         }
       `}</style>
 
-      {/* Header */}
       <header style={{ background: C.cardBg, borderBottom: `3px solid ${C.red}`, padding: "0 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, transition: "background 0.3s" }}>
         <img src="/logo-ferrolan.png" alt="Ferrolan" style={{ height: 38, objectFit: "contain", filter: isDark ? "brightness(1.2)" : "none" }} />
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -518,7 +560,6 @@ export default function Home() {
         <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + Gemini Imagen 3 · Panel Google Search Console</p>
       </div>
 
-      {/* Main 3-Column Grid */}
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem", alignItems: "start" }}>
 
         {/* ─── LEFT: FORM ─── */}
@@ -530,13 +571,11 @@ export default function Home() {
             </div>
 
             <div style={{ padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {/* Dynamic GSC-powered examples */}
+              {/* Dynamic GSC-powered topic suggestions */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                  <div style={{ ...labelStyle, color: C.muted, marginBottom: 0 }}>
-                    Sugerencias GSC
-                  </div>
-                  <button onClick={refreshExamples} title="Nuevas sugerencias"
+                  <div style={{ ...labelStyle, color: C.muted, marginBottom: 0 }}>Ideas desde GSC</div>
+                  <button onClick={refreshExamples} title="Nuevas ideas"
                     style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 6, width: 28, height: 28, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, flexShrink: 0 }}
                     onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
                     onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted; }}>
@@ -548,15 +587,16 @@ export default function Home() {
                     const s = sourceStyle(ej.source);
                     return (
                       <button key={`${ej.tema}-${i}`} onClick={() => { setTema(ej.tema); if (ej.categoria) setCategoria(ej.categoria); setKeywords(ej.keywords || ""); }}
-                        style={{ display: "flex", alignItems: "flex-start", gap: "0.6rem", width: "100%", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.55rem 0.85rem", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
+                        style={{ display: "block", width: "100%", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.6rem 0.85rem", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}
                         onMouseOver={e => e.currentTarget.style.borderColor = C.red}
                         onMouseOut={e => e.currentTarget.style.borderColor = C.redBorder}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "0.88rem", color: C.red, lineHeight: 1.4, fontWeight: 500 }}>{ej.tema}</div>
+                        <div style={{ fontSize: "0.88rem", color: C.red, lineHeight: 1.4, fontWeight: 500, marginBottom: "0.3rem" }}>{ej.tema}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                           {ej.source && (
-                            <span style={{ display: "inline-block", marginTop: "0.25rem", fontSize: "0.65rem", fontWeight: 700, color: s.color, background: s.bg, padding: "0.1rem 0.4rem", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                              {s.label}
-                            </span>
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: s.color, background: s.bg, padding: "0.1rem 0.4rem", borderRadius: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.label}</span>
+                          )}
+                          {ej.keywords && (
+                            <span style={{ fontSize: "0.7rem", color: C.muted, fontStyle: "italic" }}>KW: {ej.keywords}</span>
                           )}
                         </div>
                       </button>
@@ -620,9 +660,7 @@ export default function Home() {
 
           <div style={{ marginTop: "0.75rem", background: C.cardBg, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.red}`, borderRadius: "0 10px 10px 0", padding: "0.75rem 1.1rem", transition: "background 0.3s" }}>
             <div style={{ fontSize: "0.78rem", color: C.dark, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.25rem" }}>Cada artículo incluye</div>
-            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>
-              Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA
-            </div>
+            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA</div>
           </div>
         </div>
 
@@ -663,26 +701,18 @@ export default function Home() {
                     {copied ? "✓ Copiado" : "⎘ Copiar Markdown"}
                   </button>
                 </div>
-
                 <div style={{ padding: "2.5rem 3rem", maxHeight: "70vh", overflowY: "auto" }}>
-                  {activeTab === "preview"
-                    ? <MarkdownRenderer content={articulo} C={C} />
-                    : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.9rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articulo}</pre>
-                  }
+                  {activeTab === "preview" ? <MarkdownRenderer content={articulo} C={C} /> : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.9rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articulo}</pre>}
                 </div>
-
                 <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", background: C.light }}>
                   <button onClick={generarArticulo}
                     style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
                     onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>
-                    ↺ Regenerar
-                  </button>
+                    onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>↺ Regenerar</button>
                   <span style={{ flex: 1 }} />
                   <span style={{ fontSize: "0.85rem", color: C.muted }}>Listo para publicar en WordPress</span>
                 </div>
               </div>
-
               {imageError && (
                 <div style={{ marginTop: "0.85rem", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.65rem 1.1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {imageError}</div>
               )}
