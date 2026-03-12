@@ -335,6 +335,10 @@ export default function Home() {
   const [nextSlot, setNextSlot] = useState(null);
   const [scheduledArticles, setScheduledArticles] = useState([]);
 
+  // Publish to WordPress
+  const [publishing, setPublishing] = useState(false);
+  const [publishResult, setPublishResult] = useState(null);
+
   const C = isDark ? DARK_THEME : LIGHT;
 
   // Fetch GSC data
@@ -370,7 +374,7 @@ export default function Home() {
 
   const generarArticulo = async () => {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
-    setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false);
+    setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, keywords, tono, notas }) });
       const data = await res.json();
@@ -438,6 +442,26 @@ export default function Home() {
       }
     } catch { setError("Error de conexión al programar."); }
     setScheduling(false);
+  };
+
+  const publicarEnWP = async () => {
+    if (!articulo) return;
+    setPublishing(true); setPublishResult(null);
+    try {
+      const res = await fetch("/api/publish-now", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tema, categoria, keywords, tono, articulo }),
+      });
+      const data = await res.json();
+      if (data.published) {
+        setPublishResult(data);
+        fetchArticles();
+        setTimeout(() => setPublishResult(null), 10000);
+      } else {
+        setError(data.error || "Error al publicar en WordPress.");
+      }
+    } catch { setError("Error de conexión al publicar."); }
+    setPublishing(false);
   };
 
   // Memoize HTML conversion so it only recalculates when articulo changes
@@ -644,9 +668,16 @@ export default function Home() {
                       {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
                     </button>
 
+                    <button onClick={publicarEnWP} disabled={publishing || !!publishResult}
+                      style={{ background: publishResult ? "#DC2626" : publishing ? "#991B1B" : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: publishing ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                      onMouseOver={e => !publishing && !publishResult && (e.currentTarget.style.background = C.redDark)}
+                      onMouseOut={e => !publishing && !publishResult && (e.currentTarget.style.background = C.red)}>
+                      {publishResult ? <span className="save-check">✓ En WordPress</span> : publishing ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Publicando...</> : <>🌐 Publicar en WP</>}
+                    </button>
+
                     <span style={{ flex: 1 }} />
                     <span style={{ fontSize: "0.82rem", color: C.muted }}>
-                      {scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
+                      {publishResult ? <a href={publishResult.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Ver en WordPress →</a> : scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
                     </span>
                   </div>
 
