@@ -174,7 +174,8 @@ async function fetchLiveGSCData() {
     .slice(0, 6);
 
   // Artículos del blog
-  const articulos = (currentPages.data.rows || [])
+  const blogPages = (currentPages.data.rows || []);
+  const articulos = blogPages
     .map((r) => ({
       url: r.keys[0].replace("https://ferrolan.es", ""),
       pagina: r.keys[0].replace("https://ferrolan.es/blog/", "").replace(/\/$/, "").replace(/-/g, " ").slice(0, 50),
@@ -185,6 +186,32 @@ async function fetchLiveGSCData() {
     }))
     .sort((a, b) => b.impresiones - a.impresiones)
     .slice(0, 8);
+
+  // Nuevos temas: queries con impresiones decentes que NO tienen un artículo de blog dedicado
+  // Cruzamos cada query con las URLs del blog existentes
+  const blogUrlsText = blogPages.map((r) => r.keys[0].toLowerCase()).join(" ");
+  const nuevosTemasGSC = queries
+    .filter((q) => {
+      // Solo queries con volumen suficiente y no ya en top 3
+      if (q.impresiones < 200 || q.posicion < 3) return false;
+      // Excluir las que ya están en oportunidades u quick wins
+      if (oportunidades.some((o) => o.query === q.query)) return false;
+      if (quickWins.some((w) => w.query === q.query)) return false;
+      // Comprobar si alguna URL del blog contiene las palabras clave de la query
+      const words = q.query.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      if (words.length === 0) return false;
+      const matchCount = words.filter((w) => blogUrlsText.includes(w)).length;
+      // Si menos de la mitad de las palabras aparecen en URLs del blog, es un tema nuevo
+      return matchCount < words.length * 0.5;
+    })
+    .sort((a, b) => b.impresiones - a.impresiones)
+    .slice(0, 8)
+    .map((q) => ({
+      query: q.query,
+      impresiones: q.impresiones,
+      posicion: q.posicion,
+      sugerencia: q.query.charAt(0).toUpperCase() + q.query.slice(1) + ": guía completa",
+    }));
 
   // Resumen
   const totalClics = queries.reduce((s, q) => s + q.clics, 0);
@@ -202,6 +229,7 @@ async function fetchLiveGSCData() {
     },
     oportunidades,
     quickWins,
+    nuevosTemasGSC,
     perdiendo,
     articulosActualizar: articulos,
   };
