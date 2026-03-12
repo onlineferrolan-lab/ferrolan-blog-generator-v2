@@ -327,12 +327,12 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Scheduling
+  // Scheduling — Google Sheets
   const [showScheduler, setShowScheduler] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState("");
-  const [scheduleTime, setScheduleTime] = useState("10:00");
   const [scheduling, setScheduling] = useState(false);
   const [scheduleSuccess, setScheduleSuccess] = useState(false);
+  const [scheduleResult, setScheduleResult] = useState(null);
+  const [nextSlot, setNextSlot] = useState(null);
   const [scheduledArticles, setScheduledArticles] = useState([]);
 
   const C = isDark ? DARK_THEME : LIGHT;
@@ -354,7 +354,12 @@ export default function Home() {
     try { const res = await fetch("/api/scheduled"); const data = await res.json(); setScheduledArticles(data.scheduled || []); } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); }, [fetchGSC, fetchArticles, fetchScheduled]);
+  // Fetch next available slot from Google Sheets
+  const fetchNextSlot = useCallback(async () => {
+    try { const res = await fetch("/api/schedule-article"); const data = await res.json(); if (data.nextDate) setNextSlot(data); } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -412,21 +417,22 @@ export default function Home() {
   };
 
   const programarArticulo = async () => {
-    if (!articulo || !scheduleDate || !scheduleTime) return;
-    setScheduling(true); setScheduleSuccess(false);
+    if (!articulo) return;
+    setScheduling(true); setScheduleSuccess(false); setScheduleResult(null);
     try {
-      const publishDate = `${scheduleDate}T${scheduleTime}:00`;
       const res = await fetch("/api/schedule-article", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, keywords, tono, articulo, publishDate }),
+        body: JSON.stringify({ tema, categoria, keywords, tono, articulo }),
       });
       const data = await res.json();
       if (data.scheduled) {
         setScheduleSuccess(true);
+        setScheduleResult(data);
         setShowScheduler(false);
         fetchArticles();
         fetchScheduled();
-        setTimeout(() => setScheduleSuccess(false), 5000);
+        fetchNextSlot();
+        setTimeout(() => setScheduleSuccess(false), 6000);
       } else {
         setError(data.error || "Error al programar.");
       }
@@ -569,7 +575,8 @@ export default function Home() {
                         <div style={{ fontSize: "0.85rem", fontWeight: 700, color: C.dark, lineHeight: 1.3, marginBottom: "0.2rem" }}>{a.titulo}</div>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.72rem" }}>
                           <span style={{ color: st.color, fontWeight: 700 }}>{st.icon} {st.label}</span>
-                          {a.calendarEvent && <span style={{ color: C.muted }}>📆 En calendario</span>}
+                          {a.publishDateFormatted && <span style={{ color: C.muted }}>📋 {a.publishDateFormatted}</span>}
+                          {a.sheetRow && <span style={{ color: C.muted }}>Fila {a.sheetRow}</span>}
                           {a.wpLink && <a href={a.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Ver →</a>}
                         </div>
                       </div>
@@ -631,7 +638,7 @@ export default function Home() {
                       {saveSuccess ? <span className="save-check">✓ Guardado</span> : saving ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Guardando...</> : <>✦ Guardar</>}
                     </button>
 
-                    <button onClick={() => { setShowScheduler(!showScheduler); if (!scheduleDate) { const d = new Date(); d.setDate(d.getDate() + 1); setScheduleDate(d.toISOString().split("T")[0]); } }}
+                    <button onClick={() => setShowScheduler(!showScheduler)}
                       disabled={scheduleSuccess}
                       style={{ background: scheduleSuccess ? "#2563EB" : showScheduler ? C.blue : C.cardBg, color: scheduleSuccess ? "#FFF" : showScheduler ? "#FFF" : C.blue, border: `1px solid ${scheduleSuccess || showScheduler ? "transparent" : C.blue}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                       {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
@@ -639,35 +646,40 @@ export default function Home() {
 
                     <span style={{ flex: 1 }} />
                     <span style={{ fontSize: "0.82rem", color: C.muted }}>
-                      {scheduleSuccess ? "Añadido al calendario ✓" : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
+                      {scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
                     </span>
                   </div>
 
-                  {/* Scheduler panel */}
+                  {/* Scheduler panel — Google Sheets */}
                   {showScheduler && (
                     <div style={{ background: C.cardBg, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "1rem 1.25rem", animation: "fadeIn 0.2s ease" }}>
-                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.65rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         📅 Programar publicación
                       </div>
-                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <div>
-                          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: "0.3rem" }}>Fecha</label>
-                          <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)}
-                            min={new Date().toISOString().split("T")[0]}
-                            style={{ border: `1px solid ${C.inputBorder}`, borderRadius: 8, padding: "0.55rem 0.75rem", fontSize: "0.9rem", background: C.inputBg, color: C.dark, fontFamily: "inherit", outline: "none" }} />
+
+                      {nextSlot ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                          <div style={{ background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.85rem 1.25rem", flex: 1 }}>
+                            <div style={{ fontSize: "0.72rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Próximo slot disponible</div>
+                            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: C.blue, fontFamily: "'Oswald', sans-serif" }}>
+                              {nextSlot.dayName} {nextSlot.nextDate}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: C.muted, marginTop: "0.15rem" }}>
+                              Fila {nextSlot.nextRow} del Google Sheet
+                            </div>
+                          </div>
+
+                          <button onClick={programarArticulo} disabled={scheduling}
+                            style={{ background: scheduling ? "#1D4ED8" : C.blue, color: "#FFF", border: "none", borderRadius: 10, padding: "0.85rem 1.8rem", fontSize: "0.9rem", cursor: scheduling ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}>
+                            {scheduling ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Programando...</> : "Confirmar"}
+                          </button>
                         </div>
-                        <div>
-                          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: "0.3rem" }}>Hora</label>
-                          <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)}
-                            style={{ border: `1px solid ${C.inputBorder}`, borderRadius: 8, padding: "0.55rem 0.75rem", fontSize: "0.9rem", background: C.inputBg, color: C.dark, fontFamily: "inherit", outline: "none" }} />
-                        </div>
-                        <button onClick={programarArticulo} disabled={scheduling || !scheduleDate}
-                          style={{ background: scheduling ? "#1D4ED8" : C.blue, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.5rem", fontSize: "0.85rem", cursor: scheduling ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                          {scheduling ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Programando...</> : "Confirmar"}
-                        </button>
-                      </div>
-                      <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.5rem", lineHeight: 1.4 }}>
-                        Se creará un evento en Google Calendar y el artículo se publicará automáticamente en WordPress a la hora programada.
+                      ) : (
+                        <div style={{ fontSize: "0.88rem", color: C.muted }}>Cargando próximo slot disponible...</div>
+                      )}
+
+                      <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.65rem", lineHeight: 1.4 }}>
+                        Se publicará cada martes y jueves. Se añadirá automáticamente al Google Sheet del departamento.
                       </div>
                     </div>
                   )}
