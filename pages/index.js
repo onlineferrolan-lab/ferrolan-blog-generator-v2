@@ -327,6 +327,14 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Scheduling
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("10:00");
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleSuccess, setScheduleSuccess] = useState(false);
+  const [scheduledArticles, setScheduledArticles] = useState([]);
+
   const C = isDark ? DARK_THEME : LIGHT;
 
   // Fetch GSC data
@@ -341,7 +349,12 @@ export default function Home() {
     try { const res = await fetch("/api/articles"); const data = await res.json(); setSavedArticles(data.articles || []); } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); }, [fetchGSC, fetchArticles]);
+  // Fetch scheduled articles
+  const fetchScheduled = useCallback(async () => {
+    try { const res = await fetch("/api/scheduled"); const data = await res.json(); setScheduledArticles(data.scheduled || []); } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); }, [fetchGSC, fetchArticles, fetchScheduled]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -396,6 +409,29 @@ export default function Home() {
     const content = activeTab === "html" ? articuloHtml : articulo;
     navigator.clipboard.writeText(content);
     setCopied(true); setTimeout(() => setCopied(false), 2200);
+  };
+
+  const programarArticulo = async () => {
+    if (!articulo || !scheduleDate || !scheduleTime) return;
+    setScheduling(true); setScheduleSuccess(false);
+    try {
+      const publishDate = `${scheduleDate}T${scheduleTime}:00`;
+      const res = await fetch("/api/schedule-article", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tema, categoria, keywords, tono, articulo, publishDate }),
+      });
+      const data = await res.json();
+      if (data.scheduled) {
+        setScheduleSuccess(true);
+        setShowScheduler(false);
+        fetchArticles();
+        fetchScheduled();
+        setTimeout(() => setScheduleSuccess(false), 5000);
+      } else {
+        setError(data.error || "Error al programar.");
+      }
+    } catch { setError("Error de conexión al programar."); }
+    setScheduling(false);
   };
 
   // Memoize HTML conversion so it only recalculates when articulo changes
@@ -508,6 +544,41 @@ export default function Home() {
 
           {/* Saved articles history */}
           <SavedArticlesPanel articles={savedArticles} onRefresh={fetchArticles} C={C} />
+
+          {/* Scheduled articles */}
+          {scheduledArticles.length > 0 && (
+            <div style={{ marginTop: "0.75rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ background: C.panelHeader, padding: "0.65rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.05em" }}>📅 Programados</span>
+                <span style={{ background: C.blue, color: "#FFF", fontSize: "0.65rem", fontWeight: 700, padding: "0.08rem 0.4rem", borderRadius: 10 }}>
+                  {scheduledArticles.filter(a => a.status === "scheduled").length}
+                </span>
+              </div>
+              <div style={{ padding: "0.85rem 1.1rem", maxHeight: "250px", overflowY: "auto" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                  {scheduledArticles.map((a, i) => {
+                    const isPast = new Date(a.publishDate) < new Date();
+                    const statusColors = {
+                      scheduled: { bg: C.blueLight, border: C.blueBorder, color: C.blue, icon: "📅", label: isPast ? "Pendiente publicar" : new Date(a.publishDate).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) },
+                      published: { bg: C.greenLight, border: C.greenBorder, color: C.green, icon: "✅", label: "Publicado" },
+                      failed: { bg: C.redLight, border: C.redBorder, color: C.red, icon: "❌", label: "Error" },
+                    };
+                    const st = statusColors[a.status] || statusColors.scheduled;
+                    return (
+                      <div key={a.id || i} style={{ background: st.bg, border: `1px solid ${st.border}`, borderRadius: 8, padding: "0.6rem 0.8rem" }}>
+                        <div style={{ fontSize: "0.85rem", fontWeight: 700, color: C.dark, lineHeight: 1.3, marginBottom: "0.2rem" }}>{a.titulo}</div>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", fontSize: "0.72rem" }}>
+                          <span style={{ color: st.color, fontWeight: 700 }}>{st.icon} {st.label}</span>
+                          {a.calendarEvent && <span style={{ color: C.muted }}>📆 En calendario</span>}
+                          {a.wpLink && <a href={a.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Ver →</a>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ─── CENTER: RESULT ─── */}
@@ -545,36 +616,61 @@ export default function Home() {
                   {activeTab === "preview" ? <MarkdownRenderer content={articulo} C={C} /> : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.88rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articuloHtml}</pre>}
                 </div>
 
-                {/* Bottom bar with Regenerar + Publicar */}
-                <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", alignItems: "center", gap: "0.75rem", background: C.light }}>
-                  <button onClick={generarArticulo}
-                    style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
-                    onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                    onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>↺ Regenerar</button>
+                {/* Bottom bar with Regenerar + Publicar + Programar */}
+                <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", background: C.light }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                    <button onClick={generarArticulo}
+                      style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+                      onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                      onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>↺ Regenerar</button>
 
-                  <button onClick={publicarArticulo} disabled={saving || saveSuccess}
-                    style={{
-                      background: saveSuccess ? "#059669" : saving ? "#065F46" : "#059669",
-                      color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.4rem",
-                      fontSize: "0.85rem", cursor: saving ? "not-allowed" : "pointer",
-                      fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase",
-                      letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem",
-                    }}
-                    onMouseOver={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#047857")}
-                    onMouseOut={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#059669")}>
-                    {saveSuccess ? (
-                      <span className="save-check">✓ Publicado</span>
-                    ) : saving ? (
-                      <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Guardando...</>
-                    ) : (
-                      <>✦ Publicar</>
-                    )}
-                  </button>
+                    <button onClick={publicarArticulo} disabled={saving || saveSuccess}
+                      style={{ background: saveSuccess ? "#059669" : "#059669", color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: saving ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                      onMouseOver={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#047857")}
+                      onMouseOut={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#059669")}>
+                      {saveSuccess ? <span className="save-check">✓ Guardado</span> : saving ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Guardando...</> : <>✦ Guardar</>}
+                    </button>
 
-                  <span style={{ flex: 1 }} />
-                  <span style={{ fontSize: "0.82rem", color: C.muted }}>
-                    {saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
-                  </span>
+                    <button onClick={() => { setShowScheduler(!showScheduler); if (!scheduleDate) { const d = new Date(); d.setDate(d.getDate() + 1); setScheduleDate(d.toISOString().split("T")[0]); } }}
+                      disabled={scheduleSuccess}
+                      style={{ background: scheduleSuccess ? "#2563EB" : showScheduler ? C.blue : C.cardBg, color: scheduleSuccess ? "#FFF" : showScheduler ? "#FFF" : C.blue, border: `1px solid ${scheduleSuccess || showScheduler ? "transparent" : C.blue}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
+                    </button>
+
+                    <span style={{ flex: 1 }} />
+                    <span style={{ fontSize: "0.82rem", color: C.muted }}>
+                      {scheduleSuccess ? "Añadido al calendario ✓" : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
+                    </span>
+                  </div>
+
+                  {/* Scheduler panel */}
+                  {showScheduler && (
+                    <div style={{ background: C.cardBg, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "1rem 1.25rem", animation: "fadeIn 0.2s ease" }}>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.65rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        📅 Programar publicación
+                      </div>
+                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+                        <div>
+                          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: "0.3rem" }}>Fecha</label>
+                          <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)}
+                            min={new Date().toISOString().split("T")[0]}
+                            style={{ border: `1px solid ${C.inputBorder}`, borderRadius: 8, padding: "0.55rem 0.75rem", fontSize: "0.9rem", background: C.inputBg, color: C.dark, fontFamily: "inherit", outline: "none" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "0.75rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: "0.3rem" }}>Hora</label>
+                          <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)}
+                            style={{ border: `1px solid ${C.inputBorder}`, borderRadius: 8, padding: "0.55rem 0.75rem", fontSize: "0.9rem", background: C.inputBg, color: C.dark, fontFamily: "inherit", outline: "none" }} />
+                        </div>
+                        <button onClick={programarArticulo} disabled={scheduling || !scheduleDate}
+                          style={{ background: scheduling ? "#1D4ED8" : C.blue, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.5rem", fontSize: "0.85rem", cursor: scheduling ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          {scheduling ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Programando...</> : "Confirmar"}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.5rem", lineHeight: 1.4 }}>
+                        Se creará un evento en Google Calendar y el artículo se publicará automáticamente en WordPress a la hora programada.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
