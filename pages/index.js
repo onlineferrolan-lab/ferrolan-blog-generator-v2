@@ -221,7 +221,7 @@ function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }
           <button onClick={onRefresh} disabled={gscLoading} style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar">↺</button>
         </div>
       </div>
-      <div style={{ padding: "1.25rem", maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
+      <div style={{ padding: "1.25rem", overflowY: "visible" }}>
         {gscLoading && <div style={{ textAlign: "center", padding: "3rem 1rem" }}><div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} /><div style={{ fontSize: "0.9rem", color: C.muted }}>Cargando datos GSC...</div></div>}
         {gscError && !gscLoading && <div style={{ background: C.redLight, borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.9rem", color: C.red }}>⚠ {gscError}</div>}
         {gscData && !gscLoading && (
@@ -388,7 +388,7 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
         </div>
       </div>
 
-      <div style={{ padding: "1.25rem", maxHeight: "calc(100vh - 500px)", overflowY: "auto" }}>
+      <div style={{ padding: "1.25rem", overflowY: "visible" }}>
         {kwLoading && (
           <div style={{ textAlign: "center", padding: "2rem" }}>
             <div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
@@ -957,7 +957,7 @@ export default function Home() {
         </div>
 
         {/* ─── RIGHT: GSC + ADS PANELS ─── */}
-        <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
+        <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem", maxHeight: "calc(100vh - 3rem)", overflowY: "auto", overflowX: "visible", paddingRight: "2px" }}>
           <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
           <KeywordsPanel kwData={kwData} kwLoading={kwLoading} onRefresh={() => fetchKeywords(true)} onSelectTopic={handleSelectTopic} C={C} />
         </div>
