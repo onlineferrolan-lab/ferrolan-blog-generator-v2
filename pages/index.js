@@ -187,7 +187,7 @@ function ImagePanel({ imagenes, loadingImages, onGenerate, hasArticle, C }) {
 // ─── GSC Panel ──────────────────────────────────────────────────────────────
 
 function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }) {
-  const [tab, setTab] = useState("oportunidades");
+  const [tab, setTab] = useState("sinCubrir");
   const tabStyle = (t) => ({ padding: "0.45rem 0.6rem", borderRadius: 6, border: "none", background: tab === t ? C.red : "transparent", color: tab === t ? "#FFF" : "#AAA", fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", flex: 1, textAlign: "center" });
   const posColor = (pos) => pos <= 3 ? C.green : pos <= 7 ? C.orange : C.red;
   const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : n.toString();
@@ -407,7 +407,6 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "1rem" }}>
               {[
                 ["Sin cubrir", kwData.resumen.sinCubrir],
-                ["Oportunidades", kwData.resumen.oportunidades],
                 ["Sugeridas", kwData.resumen.sugeridas],
               ].map(([label, value], i) => (
                 <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.7rem", textAlign: "center", border: `1px solid ${C.border}` }}>
@@ -428,7 +427,7 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: "#5B21B6", borderRadius: 8, padding: "0.2rem" }}>
-              {[["sinCubrir", "Sin cubrir"], ["oportunidades", "Oportunidades"], ["sugeridas", "Sugeridas"]].map(([key, label]) => (
+              {[["sinCubrir", "Sin cubrir"], ["sugeridas", "Sugeridas"]].map(([key, label]) => (
                 <button key={key} onClick={() => setTab(key)} style={tabStyle(key)}>{label}</button>
               ))}
             </div>
@@ -459,31 +458,6 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
               </div>
             )}
 
-            {/* Tab: Oportunidades */}
-            {tab === "oportunidades" && (
-              <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Ya hay presencia en GSC pero se puede mejorar con contenido dedicado.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(kwData.oportunidades || []).map((item, i) => (
-                    <button key={i} onClick={() => handleClick(item)}
-                      style={{ display: "block", width: "100%", textAlign: "left", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
-                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
-                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
-                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
-                        {item.razon && <span>· {item.razon}</span>}
-                      </div>
-                    </button>
-                  ))}
-                  {(kwData.oportunidades || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay oportunidades de mejora detectadas</div>}
-                </div>
-              </div>
-            )}
 
             {/* Tab: Sugeridas */}
             {tab === "sugeridas" && (
