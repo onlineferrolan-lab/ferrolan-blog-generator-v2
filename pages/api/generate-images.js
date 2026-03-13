@@ -29,6 +29,14 @@ Responde ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, sin
   "imagen2": {
     "descripcion": "para qué es esta imagen",
     "prompt": "el prompt completo en inglés"
+  },
+  "imagen3": {
+    "descripcion": "para qué es esta imagen",
+    "prompt": "el prompt completo en inglés"
+  },
+  "imagen4": {
+    "descripcion": "para qué es esta imagen",
+    "prompt": "el prompt completo en inglés"
   }
 }`;
 
@@ -37,17 +45,21 @@ Tema: ${tema}
 Categoría: ${categoria}
 Primeros 400 caracteres del artículo: ${articleText.slice(0, 400)}
 
-Genera 2 prompts de imagen para este artículo:
+Genera 4 prompts de imagen para este artículo:
 
-IMAGEN 1 — Foto ambiente: Escena completa y contextual que refleje exactamente el tema del artículo. Adapta el espacio al tema (jardín, baño, cocina, fachada, salón, terraza...). Estilo editorial hiperrealista.
+IMAGEN 1 — Foto ambiente principal: Escena completa y contextual que refleje exactamente el tema del artículo. Adapta el espacio al tema (jardín, baño, cocina, fachada, salón, terraza...). Gran angular, luz natural, estilo editorial.
 
-IMAGEN 2 — Detalle de material/textura: Primer plano ultra detallado del material principal del que habla el artículo (cerámica, porcelánico, madera, piedra, metal, vegetal...). Luz rasante, textura visible, fondo desenfocado.
+IMAGEN 2 — Detalle de material/textura: Primer plano ultra detallado del material principal del que habla el artículo (cerámica, porcelánico, madera, piedra, metal...). Luz rasante, textura visible, fondo muy desenfocado.
+
+IMAGEN 3 — Plano medio de uso real: Muestra cómo se usa o instala el producto/material en un contexto real de obra o reforma. Perspectiva media, realismo técnico, iluminación neutra de taller o espacio en construcción.
+
+IMAGEN 4 — Inspiración / mood: Imagen de inspiración con estética aspiracional, paleta de colores del material, composición artística. Estilo Architectural Digest, muy cuidada, evocadora.
 
 Los prompts deben estar en inglés y ser muy específicos y descriptivos.`;
 
   const message = await client.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 600,
+    max_tokens: 1200,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
@@ -129,18 +141,20 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No se pudieron generar los prompts de imagen" });
     }
 
-    // 2. Gemini genera las dos imágenes en paralelo
-    const [img1, img2] = await Promise.all([
-      generateImageWithGemini(prompts.imagen1.prompt),
-      generateImageWithGemini(prompts.imagen2.prompt),
-    ]);
+    // 2. Gemini genera las 4 imágenes en paralelo
+    const imageKeys = ["imagen1", "imagen2", "imagen3", "imagen4"].filter(k => prompts[k]?.prompt);
+    const imageResults = await Promise.all(
+      imageKeys.map(k => generateImageWithGemini(prompts[k].prompt))
+    );
 
-    return res.status(200).json({
-      imagenes: [
-        { src: img1, descripcion: prompts.imagen1.descripcion, prompt: prompts.imagen1.prompt },
-        { src: img2, descripcion: prompts.imagen2.descripcion, prompt: prompts.imagen2.prompt },
-      ],
-    });
+    const imagenes = imageKeys.map((k, i) => ({
+      src: imageResults[i],
+      descripcion: prompts[k].descripcion,
+      prompt: prompts[k].prompt,
+      tipo: ["ambiente", "detalle", "uso", "inspiracion"][i] || "adicional",
+    }));
+
+    return res.status(200).json({ imagenes });
   } catch (err) {
     console.error("Image generation error:", err);
     return res.status(500).json({ error: err.message || "Error generando imágenes" });
