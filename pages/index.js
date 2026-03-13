@@ -300,6 +300,191 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
   );
 }
 
+// ─── Ads Panel ──────────────────────────────────────────────────────────────
+
+function AdsPanel({ adsData, adsLoading, onRefresh, onSelectTopic, C }) {
+  const [tab, setTab] = useState("sinBlog");
+
+  const tabStyle = (t) => ({
+    padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
+    background: tab === t ? "#F59E0B" : "transparent",
+    color: tab === t ? "#FFF" : "#AAA",
+    fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif",
+    fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em",
+    whiteSpace: "nowrap", flex: 1, textAlign: "center",
+  });
+
+  const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : n.toString();
+  const formatMoney = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K€" : n.toFixed(2) + "€";
+
+  const handleClick = (item) => {
+    const kw = item.keyword;
+    const Kw = kw.charAt(0).toUpperCase() + kw.slice(1);
+    // Generate a title suggestion
+    const titles = [
+      `Guía completa de ${kw}: tipos, usos y cómo elegir`,
+      `${Kw}: todo lo que necesitas saber`,
+      `Cómo elegir ${kw} sin equivocarte`,
+      `${Kw}: ventajas, inconvenientes y alternativas`,
+    ];
+    const tema = titles[Math.floor(Math.random() * titles.length)];
+    onSelectTopic({ tema, categoria: "", keywords: kw });
+  };
+
+  // Not configured or no data
+  if (!adsData || !adsData.configured) {
+    return (
+      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
+        <div style={{ background: "#92400E", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>📊 Panel Ads</span>
+        </div>
+        <div style={{ padding: "1.5rem", textAlign: "center" }}>
+          <div style={{ fontSize: "0.9rem", color: C.muted, lineHeight: 1.5 }}>
+            Configura <code style={{ background: C.light, padding: "0.1rem 0.4rem", borderRadius: 4, fontSize: "0.82rem" }}>GOOGLE_ADS_SHEET_ID</code> en Vercel para activar los datos de Google Ads.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
+      {/* Header */}
+      <div style={{ background: "#92400E", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Panel Ads</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {adsData.lastUpdated && (
+            <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.6)" }}>
+              {new Date(adsData.lastUpdated).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+            </span>
+          )}
+          <button onClick={onRefresh} disabled={adsLoading}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>↺</button>
+        </div>
+      </div>
+
+      <div style={{ padding: "1.25rem", maxHeight: "calc(100vh - 500px)", overflowY: "auto" }}>
+        {adsLoading && (
+          <div style={{ textAlign: "center", padding: "2rem" }}>
+            <div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: "#F59E0B", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
+            <div style={{ fontSize: "0.9rem", color: C.muted }}>Cargando datos Ads...</div>
+          </div>
+        )}
+
+        {adsData.error && !adsLoading && (
+          <div style={{ background: C.orangeLight, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.orange, lineHeight: 1.4 }}>ⓘ {adsData.error}</div>
+        )}
+
+        {adsData.resumen && !adsLoading && (
+          <>
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "1rem" }}>
+              {[
+                ["Gasto", formatMoney(adsData.resumen.totalCoste)],
+                ["Clics", formatNum(adsData.resumen.totalClics)],
+                ["CPC medio", adsData.resumen.cpcMedio + "€"],
+              ].map(([label, value], i) => (
+                <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.7rem", textAlign: "center", border: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{value}</div>
+                  <div style={{ fontSize: "0.65rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: "#92400E", borderRadius: 8, padding: "0.2rem" }}>
+              {[["sinBlog", "Sin blog"], ["ahorro", "Ahorro"], ["ideas", "Ideas nuevas"]].map(([key, label]) => (
+                <button key={key} onClick={() => setTab(key)} style={tabStyle(key)}>{label}</button>
+              ))}
+            </div>
+
+            {/* Tab: Keywords sin blog */}
+            {tab === "sinBlog" && (
+              <div>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords de Ads sin artículo en el blog. Crear contenido = menos gasto en Ads.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {(adsData.sinBlog || []).map((item, i) => (
+                    <button key={i} onClick={() => handleClick(item)}
+                      style={{ display: "block", width: "100%", textAlign: "left", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
+                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,0.15)", padding: "0.15rem 0.5rem", borderRadius: 6 }}>{formatMoney(item.costeTotal)}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
+                        <span>{item.clics} clics</span>
+                        <span>CPC {item.cpcMedio}€</span>
+                        {item.posicionOrganica && <span style={{ color: C.green }}>Pos. org: {item.posicionOrganica}</span>}
+                        {!item.enGSC && <span style={{ color: C.orange, fontWeight: 600 }}>Sin presencia orgánica</span>}
+                      </div>
+                    </button>
+                  ))}
+                  {(adsData.sinBlog || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay keywords sin blog detectadas</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Ahorro potencial */}
+            {tab === "ahorro" && (
+              <div>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords con CPC alto. Posicionar orgánico = ahorrar este gasto.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {(adsData.ahorroPotencial || []).map((item, i) => (
+                    <button key={i} onClick={() => handleClick(item)}
+                      style={{ display: "block", width: "100%", textAlign: "left", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
+                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#DC2626", background: "rgba(220,38,38,0.1)", padding: "0.15rem 0.5rem", borderRadius: 6 }}>CPC {item.cpcMedio}€</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
+                        <span>Gasto: {formatMoney(item.costeTotal)}</span>
+                        <span>{item.clics} clics</span>
+                        {item.posicionOrganica ? <span style={{ color: C.green }}>Pos. org: {item.posicionOrganica}</span> : <span style={{ color: C.orange }}>Sin orgánico</span>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Ideas nuevas */}
+            {tab === "ideas" && (
+              <div>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords de Ads que no aparecen en GSC. Temas completamente nuevos para el blog.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {(adsData.ideasNuevas || []).map((item, i) => (
+                    <button key={i} onClick={() => handleClick(item)}
+                      style={{ display: "block", width: "100%", textAlign: "left", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
+                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
+                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#B45309" }}>{formatNum(item.impresiones)} impr</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
+                        <span>{item.clics} clics</span>
+                        <span>CPC {item.cpcMedio}€</span>
+                        <span style={{ color: "#B45309", fontWeight: 600 }}>★ No existe en orgánico</span>
+                      </div>
+                    </button>
+                  ))}
+                  {(adsData.ideasNuevas || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las keywords de Ads ya aparecen en GSC</div>}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -339,6 +524,10 @@ export default function Home() {
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState(null);
 
+  // Ads data
+  const [adsData, setAdsData] = useState(null);
+  const [adsLoading, setAdsLoading] = useState(true);
+
   const C = isDark ? DARK_THEME : LIGHT;
 
   // Fetch GSC data
@@ -363,7 +552,14 @@ export default function Home() {
     try { const res = await fetch("/api/schedule-article"); const data = await res.json(); if (data.nextDate) setNextSlot(data); } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot]);
+  // Fetch ads data
+  const fetchAds = useCallback(async () => {
+    setAdsLoading(true);
+    try { const res = await fetch("/api/ads-data"); const data = await res.json(); setAdsData(data); } catch { /* silent */ }
+    setAdsLoading(false);
+  }, []);
+
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchAds(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchAds]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -723,9 +919,10 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── RIGHT: GSC PANEL ─── */}
+        {/* ─── RIGHT: GSC + ADS PANELS ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
           <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
+          <AdsPanel adsData={adsData} adsLoading={adsLoading} onRefresh={fetchAds} onSelectTopic={handleSelectTopic} C={C} />
         </div>
       </div>
     </>
