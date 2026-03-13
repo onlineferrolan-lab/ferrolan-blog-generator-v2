@@ -40,22 +40,44 @@ async function readAdsSheet(auth) {
     lastUpdated = metaRes.data.values?.[0]?.[0] || null;
   } catch { /* no metadata sheet */ }
 
+  // Helper: parse numbers that might be in European format (1.234,56) or US format (1,234.56)
+  const parseNum = (val) => {
+    if (!val && val !== 0) return 0;
+    const str = String(val).trim();
+    if (str === "") return 0;
+    // If it has both dot and comma, determine format
+    const lastDot = str.lastIndexOf(".");
+    const lastComma = str.lastIndexOf(",");
+    let cleaned;
+    if (lastComma > lastDot) {
+      // European: 1.234,56 → remove dots, replace comma with dot
+      cleaned = str.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US or no decimals: 1,234.56 → remove commas
+      cleaned = str.replace(/,/g, "");
+    }
+    // Remove any non-numeric chars except dot and minus
+    cleaned = cleaned.replace(/[^0-9.\-]/g, "");
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  };
+
   return {
     lastUpdated,
     keywords: rows.map((row) => ({
       keyword: (row[0] || "").toLowerCase().trim(),
       campana: row[1] || "",
       grupoAnuncios: row[2] || "",
-      clics: parseInt(row[3]) || 0,
-      impresiones: parseInt(row[4]) || 0,
-      ctr: parseFloat(row[5]) || 0,
-      cpcMedio: parseFloat(row[6]) || 0,
-      costeTotal: parseFloat(row[7]) || 0,
-      conversiones: parseFloat(row[8]) || 0,
-      costeConversion: parseFloat(row[9]) || 0,
+      clics: Math.round(parseNum(row[3])),
+      impresiones: Math.round(parseNum(row[4])),
+      ctr: parseNum(row[5]),
+      cpcMedio: parseNum(row[6]),
+      costeTotal: parseNum(row[7]),
+      conversiones: parseNum(row[8]),
+      costeConversion: parseNum(row[9]),
       estado: row[10] || "",
       matchType: row[11] || "",
-      qualityScore: row[12] ? parseInt(row[12]) : null,
+      qualityScore: row[12] ? Math.round(parseNum(row[12])) : null,
     })),
   };
 }
