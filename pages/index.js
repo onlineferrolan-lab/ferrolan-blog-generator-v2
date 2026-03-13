@@ -163,25 +163,185 @@ function MarkdownRenderer({ content, C }) {
   flushList(); return <div>{elements}</div>;
 }
 
-function ImagePanel({ imagenes, loadingImages, onGenerate, hasArticle, C }) {
+// ─── Image Palette (draggable thumbnails) ───────────────────────────────────
+function ImagePalette({ imagenes, loadingImages, onGenerate, hasArticle, onDragStart, C }) {
   if (!hasArticle) return null;
+
+  const TIPO_LABELS = { ambiente: "Ambiente", detalle: "Detalle", uso: "Uso real", inspiracion: "Inspiración", adicional: "Extra" };
+
   return (
     <div style={{ marginTop: "1.25rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ background: C.panelHeader, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ background: C.panelHeader, padding: "0.65rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Imágenes del artículo</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.82rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Imágenes · arrastra al artículo</span>
         </div>
-        {!loadingImages && imagenes.length === 0 && <button onClick={onGenerate} style={{ background: C.red, color: "#FFF", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase" }} onMouseOver={e => e.currentTarget.style.background = C.redDark} onMouseOut={e => e.currentTarget.style.background = C.red}>Generar imágenes</button>}
-        {imagenes.length > 0 && <button onClick={onGenerate} style={{ background: "rgba(255,255,255,0.12)", color: "#CCC", border: "none", borderRadius: 6, padding: "0.4rem 1rem", fontSize: "0.82rem", cursor: "pointer", fontWeight: 600 }}>↺ Regenerar</button>}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          {!loadingImages && imagenes.length === 0 && (
+            <button onClick={onGenerate} style={{ background: C.red, color: "#FFF", border: "none", borderRadius: 6, padding: "0.35rem 0.9rem", fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase" }}
+              onMouseOver={e => e.currentTarget.style.background = C.redDark}
+              onMouseOut={e => e.currentTarget.style.background = C.red}>Generar</button>
+          )}
+          {imagenes.length > 0 && (
+            <button onClick={onGenerate} style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, padding: "0.35rem 0.75rem", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600 }}>↺ Regen.</button>
+          )}
+        </div>
       </div>
-      <div style={{ padding: "1.5rem" }}>
-        {loadingImages && <div style={{ textAlign: "center", padding: "3rem 1rem" }}><div style={{ width: 44, height: 44, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1.2rem" }} /><div style={{ color: C.dark, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", fontSize: "0.95rem", marginBottom: "0.4rem" }}>Generando imágenes...</div><div style={{ color: C.muted, fontSize: "0.9rem" }}>Claude diseña los prompts · Gemini Imagen 3 las renderiza</div></div>}
-        {!loadingImages && imagenes.length === 0 && <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: C.muted, fontSize: "0.95rem" }}>Pulsa <strong style={{ color: C.red }}>Generar imágenes</strong> para crear las imágenes del artículo con IA</div>}
-        {imagenes.length > 0 && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>{imagenes.map((img, i) => (<div key={i}><div style={{ fontSize: "0.78rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem", fontFamily: "'Oswald', sans-serif" }}>{i === 0 ? "Imagen ambiente" : "Detalle de material"}</div><img src={img.src} alt={img.descripcion} style={{ width: "100%", borderRadius: 10, display: "block", border: `1px solid ${C.border}` }} /><div style={{ fontSize: "0.85rem", color: C.muted, marginTop: "0.5rem", lineHeight: 1.5, fontStyle: "italic" }}>{img.descripcion}</div><a href={img.src} download={`ferrolan-imagen-${i + 1}.png`} style={{ display: "inline-block", marginTop: "0.5rem", fontSize: "0.85rem", color: C.red, fontWeight: 600, textDecoration: "none" }}>↓ Descargar</a></div>))}</div>}
+
+      <div style={{ padding: "1rem 1.25rem" }}>
+        {loadingImages && (
+          <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
+            <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.75rem" }} />
+            <div style={{ color: C.dark, fontWeight: 700, fontFamily: "'Oswald', sans-serif", fontSize: "0.85rem", marginBottom: "0.25rem" }}>Generando 4 imágenes...</div>
+            <div style={{ color: C.muted, fontSize: "0.8rem" }}>Claude diseña los prompts · Gemini las renderiza</div>
+          </div>
+        )}
+
+        {!loadingImages && imagenes.length === 0 && (
+          <div style={{ textAlign: "center", padding: "1.25rem 1rem", color: C.muted, fontSize: "0.88rem", lineHeight: 1.5 }}>
+            Genera las imágenes y después <strong style={{ color: C.mid }}>arrástralas</strong> a la posición que quieras dentro del artículo
+          </div>
+        )}
+
+        {imagenes.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
+            {imagenes.map((img, i) => (
+              <div key={i}
+                draggable
+                onDragStart={() => onDragStart(i)}
+                style={{ cursor: "grab", userSelect: "none" }}>
+                <div style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: `2px solid ${C.border}`, transition: "border-color 0.15s" }}
+                  onMouseOver={e => e.currentTarget.style.borderColor = C.red}
+                  onMouseOut={e => e.currentTarget.style.borderColor = C.border}>
+                  <img src={img.src} alt={img.descripcion} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.65))", padding: "0.4rem 0.35rem 0.3rem", fontSize: "0.6rem", color: "#FFF", fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {TIPO_LABELS[img.tipo] || `Img ${i + 1}`}
+                  </div>
+                  <div style={{ position: "absolute", top: "0.3rem", right: "0.3rem", background: "rgba(0,0,0,0.5)", color: "#FFF", borderRadius: 4, padding: "0.1rem 0.3rem", fontSize: "0.6rem", fontWeight: 700 }}>
+                    ⠿
+                  </div>
+                </div>
+                <a href={img.src} download={`ferrolan-img-${i + 1}.png`}
+                  style={{ display: "block", textAlign: "center", marginTop: "0.3rem", fontSize: "0.65rem", color: C.muted, textDecoration: "none", fontWeight: 600 }}
+                  onClick={e => e.stopPropagation()}>↓ DL</a>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+// ─── Droppable Article (render markdown blocks with drop zones between them) ─
+function DroppableArticle({ articulo, imagenes, onInsertImage, C }) {
+  const [dropHighlight, setDropHighlight] = useState(null);
+
+  // Split markdown into sections on ## headings
+  function splitBlocks(text) {
+    const lines = text.split("\n");
+    const blocks = [];
+    let current = [];
+    for (const line of lines) {
+      if (line.startsWith("## ") && current.length > 0) {
+        blocks.push(current.join("\n"));
+        current = [line];
+      } else {
+        current.push(line);
+      }
+    }
+    if (current.length > 0) blocks.push(current.join("\n"));
+    return blocks.filter(b => b.trim());
+  }
+
+  const blocks = splitBlocks(articulo);
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    setDropHighlight(idx);
+  };
+  const handleDragLeave = () => setDropHighlight(null);
+  const handleDrop = (e, afterBlockIdx) => {
+    e.preventDefault();
+    setDropHighlight(null);
+    onInsertImage(afterBlockIdx);
+  };
+
+  return (
+    <div>
+      {blocks.map((block, i) => (
+        <div key={i}>
+          <BlockRenderer block={block} C={C} />
+          {/* Drop zone after each block */}
+          <div
+            onDragOver={e => handleDragOver(e, i)}
+            onDragLeave={handleDragLeave}
+            onDrop={e => handleDrop(e, i)}
+            style={{
+              height: dropHighlight === i ? "56px" : "12px",
+              margin: "0 0 0",
+              borderRadius: 8,
+              border: dropHighlight === i ? `2px dashed ${C.blue}` : "2px dashed transparent",
+              background: dropHighlight === i ? C.blueLight : "transparent",
+              transition: "all 0.15s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+            }}>
+            {dropHighlight === i && (
+              <span style={{ fontSize: "0.8rem", color: C.blue, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em", pointerEvents: "none" }}>
+                ⊕ Insertar imagen aquí
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Block renderer (renders a single markdown block including inline images) ─
+function BlockRenderer({ block, C }) {
+  const parseInline = (text) =>
+    text
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="https://ferrolan.es$2" style="color:${C.red};text-decoration:underline;font-weight:600" target="_blank">$1</a>`);
+
+  const lines = block.split("\n");
+  const elements = [];
+  let listItems = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(<ul key={`ul-${key++}`} style={{ margin: "0.8em 0 1.2em 1.6em", padding: 0 }}>{listItems.map((item, i) => (<li key={i} style={{ marginBottom: "0.5em", lineHeight: 1.75, color: C.mid, fontSize: "1.02rem" }} dangerouslySetInnerHTML={{ __html: item }} />))}</ul>);
+      listItems = [];
+    }
+  };
+
+  lines.forEach((line, i) => {
+    // Inline image from drag & drop: ![desc](src)
+    const imgMatch = line.match(/^!\[([^\]]*)\]\((.+)\)$/);
+    if (imgMatch) {
+      flushList();
+      elements.push(
+        <div key={`img-${i}`} style={{ margin: "1.5rem 0", borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
+          <img src={imgMatch[2]} alt={imgMatch[1]} style={{ width: "100%", display: "block", maxHeight: "420px", objectFit: "cover" }} />
+          {imgMatch[1] && <div style={{ padding: "0.5rem 0.85rem", fontSize: "0.82rem", color: C.muted, fontStyle: "italic", background: C.light }}>{imgMatch[1]}</div>}
+        </div>
+      );
+    } else if (line.startsWith("# ")) { flushList(); elements.push(<h1 key={i} style={{ fontSize: "1.7rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", lineHeight: 1.2, margin: "0 0 1.2rem", borderLeft: `4px solid ${C.red}`, paddingLeft: "1rem" }}>{line.slice(2)}</h1>); }
+    else if (line.startsWith("## ")) { flushList(); elements.push(<h2 key={i} style={{ fontSize: "1.2rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", margin: "2em 0 0.7em", textTransform: "uppercase", letterSpacing: "0.04em" }}><span style={{ color: C.red, marginRight: "0.5rem" }}>▸</span>{line.slice(3)}</h2>); }
+    else if (line.startsWith("### ")) { flushList(); elements.push(<h3 key={i} style={{ fontSize: "1rem", fontWeight: 700, color: C.mid, margin: "1.2em 0 0.4em", textTransform: "uppercase", letterSpacing: "0.05em" }}>{line.slice(4)}</h3>); }
+    else if (line.startsWith("- ")) { listItems.push(parseInline(line.slice(2))); }
+    else if (line === "---") { flushList(); elements.push(<hr key={i} style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "2.2em 0" }} />); }
+    else if (line.trim() === "") { flushList(); elements.push(<div key={i} style={{ height: "0.5em" }} />); }
+    else { flushList(); elements.push(<p key={i} style={{ lineHeight: 1.8, color: C.mid, margin: "0 0 0.85em", fontSize: "1.02rem" }} dangerouslySetInnerHTML={{ __html: parseInline(line) }} />); }
+  });
+
+  flushList();
+  return <div>{elements}</div>;
 }
 
 // ─── GSC Panel ──────────────────────────────────────────────────────────────
@@ -506,6 +666,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("preview");
   const [imagenes, setImagenes] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [draggedImg, setDraggedImg] = useState(null);
   const [imageError, setImageError] = useState("");
   const [isDark, setIsDark] = useState(true);
   const [gscData, setGscData] = useState(null);
@@ -672,6 +833,28 @@ export default function Home() {
   };
 
   // Memoize HTML conversion so it only recalculates when articulo changes
+  // Insert dragged image into article markdown after a given block index
+  const insertImageAtBlock = (afterBlockIdx) => {
+    if (draggedImg === null || !imagenes[draggedImg]) return;
+    const img = imagenes[draggedImg];
+    const lines = articulo.split("\n");
+    const blocks = [];
+    let current = [];
+    for (const line of lines) {
+      if (line.startsWith("## ") && current.length > 0) {
+        blocks.push(current.join("\n"));
+        current = [line];
+      } else {
+        current.push(line);
+      }
+    }
+    if (current.length > 0) blocks.push(current.join("\n"));
+    const filtered = blocks.filter(b => b.trim());
+    filtered.splice(afterBlockIdx + 1, 0, `![${img.descripcion}](${img.src})`);
+    setArticulo(filtered.join("\n\n"));
+    setDraggedImg(null);
+  };
+
   const articuloHtml = useMemo(() => articulo ? markdownToHtml(articulo) : "", [articulo]);
 
   const inputStyle = { width: "100%", border: `1px solid ${C.inputBorder}`, borderRadius: 10, padding: "0.75rem 1rem", fontSize: "0.95rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", color: C.dark, background: C.inputBg };
@@ -851,7 +1034,9 @@ export default function Home() {
                   <button onClick={copiarContenido} style={{ background: copied ? "#059669" : "rgba(255,255,255,0.1)", color: "#FFF", border: "none", borderRadius: 6, padding: "0.45rem 1rem", fontSize: "0.85rem", cursor: "pointer", fontWeight: 600 }}>{copied ? "✓ Copiado" : activeTab === "html" ? "⎘ Copiar HTML" : "⎘ Copiar texto"}</button>
                 </div>
                 <div style={{ padding: "2.5rem 3rem", maxHeight: "70vh", overflowY: "auto" }}>
-                  {activeTab === "preview" ? <MarkdownRenderer content={articulo} C={C} /> : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.88rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articuloHtml}</pre>}
+                  {activeTab === "preview"
+                    ? <DroppableArticle articulo={articulo} imagenes={imagenes} onInsertImage={insertImageAtBlock} C={C} />
+                    : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.88rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articuloHtml}</pre>}
                 </div>
 
                 {/* Bottom bar with Regenerar + Publicar + Programar */}
@@ -925,7 +1110,7 @@ export default function Home() {
               </div>
 
               {imageError && <div style={{ marginTop: "0.85rem", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.65rem 1.1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {imageError}</div>}
-              <ImagePanel imagenes={imagenes} loadingImages={loadingImages} onGenerate={generarImagenes} hasArticle={!!articulo} C={C} />
+              <ImagePalette imagenes={imagenes} loadingImages={loadingImages} onGenerate={generarImagenes} hasArticle={!!articulo} onDragStart={setDraggedImg} C={C} />
             </div>
           )}
         </div>
