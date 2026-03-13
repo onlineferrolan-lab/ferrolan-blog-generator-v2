@@ -322,6 +322,32 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
     onSelectTopic({ tema, categoria: "", keywords: item.keyword });
   };
 
+  // Idle state: panel not yet activated (kwData is null and not loading)
+  if (!kwData && !kwLoading) {
+    return (
+      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
+        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
+        </div>
+        <div style={{ padding: "2rem 1.5rem", textAlign: "center" }}>
+          <div style={{ fontSize: "0.85rem", color: C.muted, lineHeight: 1.6, marginBottom: "1.25rem" }}>
+            Analiza el catálogo de Prestashop cruzándolo con GSC y el historial de artículos para detectar oportunidades de contenido no cubiertas.
+          </div>
+          <button
+            onClick={onRefresh}
+            style={{ background: "#7C3AED", color: "#FFF", border: "none", borderRadius: 8, padding: "0.65rem 1.5rem", fontSize: "0.9rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", transition: "background 0.2s" }}
+            onMouseOver={e => e.currentTarget.style.background = "#5B21B6"}
+            onMouseOut={e => e.currentTarget.style.background = "#7C3AED"}
+          >
+            ⚡ Analizar keywords
+          </button>
+          <div style={{ fontSize: "0.72rem", color: C.muted, marginTop: "0.75rem" }}>Consume tokens de Claude · El resultado se cachea 6h en KV</div>
+        </div>
+      </div>
+    );
+  }
+
   // Not configured
   if (!kwData || !kwData.configured) {
     return (
@@ -532,7 +558,7 @@ export default function Home() {
 
   // Keywords data (Prestashop)
   const [kwData, setKwData] = useState(null);
-  const [kwLoading, setKwLoading] = useState(true);
+  const [kwLoading, setKwLoading] = useState(false);
 
   const C = isDark ? DARK_THEME : LIGHT;
 
@@ -570,7 +596,7 @@ export default function Home() {
     setKwLoading(false);
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchKeywords(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchKeywords]);
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
