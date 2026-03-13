@@ -300,47 +300,39 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
   );
 }
 
-// ─── Ads Panel ──────────────────────────────────────────────────────────────
+// ─── Keywords Panel (Prestashop × GSC × Blog) ──────────────────────────────
 
-function AdsPanel({ adsData, adsLoading, onRefresh, onSelectTopic, C }) {
-  const [tab, setTab] = useState("sinBlog");
+function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
+  const [tab, setTab] = useState("sinCubrir");
 
   const tabStyle = (t) => ({
     padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
-    background: tab === t ? "#F59E0B" : "transparent",
+    background: tab === t ? "#7C3AED" : "transparent",
     color: tab === t ? "#FFF" : "#AAA",
     fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif",
     fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em",
     whiteSpace: "nowrap", flex: 1, textAlign: "center",
   });
 
-  const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : n.toString();
-  const formatMoney = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K€" : n.toFixed(2) + "€";
+  const prioColor = (p) => p === "alta" ? C.red : p === "media" ? C.orange : C.muted;
+  const prioLabel = (p) => p === "alta" ? "▲ Alta" : p === "media" ? "● Media" : "○ Baja";
 
   const handleClick = (item) => {
-    const kw = item.keyword;
-    const Kw = kw.charAt(0).toUpperCase() + kw.slice(1);
-    // Generate a title suggestion
-    const titles = [
-      `Guía completa de ${kw}: tipos, usos y cómo elegir`,
-      `${Kw}: todo lo que necesitas saber`,
-      `Cómo elegir ${kw} sin equivocarte`,
-      `${Kw}: ventajas, inconvenientes y alternativas`,
-    ];
-    const tema = titles[Math.floor(Math.random() * titles.length)];
-    onSelectTopic({ tema, categoria: "", keywords: kw });
+    const tema = item.titulo_sugerido || `Guía completa de ${item.keyword}`;
+    onSelectTopic({ tema, categoria: "", keywords: item.keyword });
   };
 
-  // Not configured or no data
-  if (!adsData || !adsData.configured) {
+  // Not configured
+  if (!kwData || !kwData.configured) {
     return (
       <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
-        <div style={{ background: "#92400E", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>📊 Panel Ads</span>
+        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
         </div>
         <div style={{ padding: "1.5rem", textAlign: "center" }}>
           <div style={{ fontSize: "0.9rem", color: C.muted, lineHeight: 1.5 }}>
-            Configura <code style={{ background: C.light, padding: "0.1rem 0.4rem", borderRadius: 4, fontSize: "0.82rem" }}>GOOGLE_ADS_SHEET_ID</code> en Vercel para activar los datos de Google Ads.
+            Configura <code style={{ background: C.light, padding: "0.1rem 0.4rem", borderRadius: 4, fontSize: "0.82rem" }}>PRESTASHOP_API_KEY</code> en Vercel para conectar con el catálogo.
           </div>
         </div>
       </div>
@@ -350,42 +342,47 @@ function AdsPanel({ adsData, adsLoading, onRefresh, onSelectTopic, C }) {
   return (
     <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
       {/* Header */}
-      <div style={{ background: "#92400E", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Panel Ads</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {adsData.lastUpdated && (
+          {kwData.cached && (
+            <span style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.5)", fontWeight: 600, textTransform: "uppercase" }}>cache</span>
+          )}
+          {kwData.generatedAt && (
             <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.6)" }}>
-              {new Date(adsData.lastUpdated).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+              {new Date(kwData.generatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
             </span>
           )}
-          <button onClick={onRefresh} disabled={adsLoading}
-            style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>↺</button>
+          <button onClick={onRefresh} disabled={kwLoading}
+            style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            title="Regenerar keywords (consulta Prestashop + Claude)">↺</button>
         </div>
       </div>
 
       <div style={{ padding: "1.25rem", maxHeight: "calc(100vh - 500px)", overflowY: "auto" }}>
-        {adsLoading && (
+        {kwLoading && (
           <div style={{ textAlign: "center", padding: "2rem" }}>
-            <div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: "#F59E0B", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
-            <div style={{ fontSize: "0.9rem", color: C.muted }}>Cargando datos Ads...</div>
+            <div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
+            <div style={{ fontSize: "0.9rem", color: C.muted }}>Analizando catálogo Prestashop...</div>
+            <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.3rem" }}>Cruzando con artículos + GSC</div>
           </div>
         )}
 
-        {adsData.error && !adsLoading && (
-          <div style={{ background: C.orangeLight, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.orange, lineHeight: 1.4 }}>ⓘ {adsData.error}</div>
+        {kwData.error && !kwLoading && (
+          <div style={{ background: C.orangeLight, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.orange, lineHeight: 1.4 }}>ⓘ {kwData.error}</div>
         )}
 
-        {adsData.resumen && !adsLoading && (
+        {kwData.resumen && !kwLoading && (
           <>
             {/* Stats */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "1rem" }}>
               {[
-                ["Gasto", formatMoney(adsData.resumen.totalCoste)],
-                ["Clics", formatNum(adsData.resumen.totalClics)],
-                ["CPC medio", adsData.resumen.cpcMedio + "€"],
+                ["Sin cubrir", kwData.resumen.sinCubrir],
+                ["Oportunidades", kwData.resumen.oportunidades],
+                ["Sugeridas", kwData.resumen.sugeridas],
               ].map(([label, value], i) => (
                 <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.7rem", textAlign: "center", border: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: "1.1rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{value}</div>
@@ -394,87 +391,96 @@ function AdsPanel({ adsData, adsLoading, onRefresh, onSelectTopic, C }) {
               ))}
             </div>
 
+            {/* Categories badge row */}
+            {kwData.categoriasPrestashop && (
+              <div style={{ display: "flex", gap: "0.25rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                {kwData.categoriasPrestashop.map((cat, i) => (
+                  <span key={i} style={{ fontSize: "0.62rem", fontWeight: 600, color: "#7C3AED", background: "rgba(124,58,237,0.1)", padding: "0.12rem 0.4rem", borderRadius: 4 }}>{cat.name}</span>
+                ))}
+              </div>
+            )}
+
             {/* Tabs */}
-            <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: "#92400E", borderRadius: 8, padding: "0.2rem" }}>
-              {[["sinBlog", "Sin blog"], ["ahorro", "Ahorro"], ["ideas", "Ideas nuevas"]].map(([key, label]) => (
+            <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: "#5B21B6", borderRadius: 8, padding: "0.2rem" }}>
+              {[["sinCubrir", "Sin cubrir"], ["oportunidades", "Oportunidades"], ["sugeridas", "Sugeridas"]].map(([key, label]) => (
                 <button key={key} onClick={() => setTab(key)} style={tabStyle(key)}>{label}</button>
               ))}
             </div>
 
-            {/* Tab: Keywords sin blog */}
-            {tab === "sinBlog" && (
+            {/* Tab: Sin cubrir */}
+            {tab === "sinCubrir" && (
               <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords de Ads sin artículo en el blog. Crear contenido = menos gasto en Ads.</p>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Productos del catálogo sin artículo en el blog. Clic para generar.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(adsData.sinBlog || []).map((item, i) => (
+                  {(kwData.sinCubrir || []).map((item, i) => (
+                    <button key={i} onClick={() => handleClick(item)}
+                      style={{ display: "block", width: "100%", textAlign: "left", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+                      onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${C.red}20`}
+                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
+                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
+                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
+                        {item.razon && <span>· {item.razon}</span>}
+                      </div>
+                    </button>
+                  ))}
+                  {(kwData.sinCubrir || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las categorías del catálogo tienen contenido</div>}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Oportunidades */}
+            {tab === "oportunidades" && (
+              <div>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Ya hay presencia en GSC pero se puede mejorar con contenido dedicado.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {(kwData.oportunidades || []).map((item, i) => (
                     <button key={i} onClick={() => handleClick(item)}
                       style={{ display: "block", width: "100%", textAlign: "left", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
                       onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
                       onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
                         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#B45309", background: "rgba(245,158,11,0.15)", padding: "0.15rem 0.5rem", borderRadius: 6 }}>{formatMoney(item.costeTotal)}</span>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
                       </div>
-                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
-                        <span>{item.clics} clics</span>
-                        <span>CPC {item.cpcMedio}€</span>
-                        {item.posicionOrganica && <span style={{ color: C.green }}>Pos. org: {item.posicionOrganica}</span>}
-                        {!item.enGSC && <span style={{ color: C.orange, fontWeight: 600 }}>Sin presencia orgánica</span>}
+                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
+                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
+                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
+                        {item.razon && <span>· {item.razon}</span>}
                       </div>
                     </button>
                   ))}
-                  {(adsData.sinBlog || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay keywords sin blog detectadas</div>}
+                  {(kwData.oportunidades || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay oportunidades de mejora detectadas</div>}
                 </div>
               </div>
             )}
 
-            {/* Tab: Ahorro potencial */}
-            {tab === "ahorro" && (
+            {/* Tab: Sugeridas */}
+            {tab === "sugeridas" && (
               <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords con CPC alto. Posicionar orgánico = ahorrar este gasto.</p>
+                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords long-tail generadas por IA cruzando catálogo y tendencias.</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(adsData.ahorroPotencial || []).map((item, i) => (
+                  {(kwData.sugeridas || []).map((item, i) => (
                     <button key={i} onClick={() => handleClick(item)}
-                      style={{ display: "block", width: "100%", textAlign: "left", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
+                      style={{ display: "block", width: "100%", textAlign: "left", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+                      onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${C.blue}20`}
                       onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
                         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#DC2626", background: "rgba(220,38,38,0.1)", padding: "0.15rem 0.5rem", borderRadius: 6 }}>CPC {item.cpcMedio}€</span>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
                       </div>
-                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
-                        <span>Gasto: {formatMoney(item.costeTotal)}</span>
-                        <span>{item.clics} clics</span>
-                        {item.posicionOrganica ? <span style={{ color: C.green }}>Pos. org: {item.posicionOrganica}</span> : <span style={{ color: C.orange }}>Sin orgánico</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tab: Ideas nuevas */}
-            {tab === "ideas" && (
-              <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords de Ads que no aparecen en GSC. Temas completamente nuevos para el blog.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(adsData.ideasNuevas || []).map((item, i) => (
-                    <button key={i} onClick={() => handleClick(item)}
-                      style={{ display: "block", width: "100%", textAlign: "left", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseOver={e => e.currentTarget.style.boxShadow = "0 2px 12px rgba(217,119,6,0.15)"}
-                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "#B45309" }}>{formatNum(item.impresiones)} impr</span>
-                      </div>
-                      <div style={{ display: "flex", gap: "0.7rem", fontSize: "0.8rem", color: C.muted }}>
-                        <span>{item.clics} clics</span>
-                        <span>CPC {item.cpcMedio}€</span>
-                        <span style={{ color: "#B45309", fontWeight: 600 }}>★ No existe en orgánico</span>
+                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
+                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
+                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
+                        {item.razon && <span>· {item.razon}</span>}
                       </div>
                     </button>
                   ))}
-                  {(adsData.ideasNuevas || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las keywords de Ads ya aparecen en GSC</div>}
+                  {(kwData.sugeridas || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay sugerencias adicionales</div>}
                 </div>
               </div>
             )}
@@ -524,9 +530,9 @@ export default function Home() {
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState(null);
 
-  // Ads data
-  const [adsData, setAdsData] = useState(null);
-  const [adsLoading, setAdsLoading] = useState(true);
+  // Keywords data (Prestashop)
+  const [kwData, setKwData] = useState(null);
+  const [kwLoading, setKwLoading] = useState(true);
 
   const C = isDark ? DARK_THEME : LIGHT;
 
@@ -552,14 +558,19 @@ export default function Home() {
     try { const res = await fetch("/api/schedule-article"); const data = await res.json(); if (data.nextDate) setNextSlot(data); } catch { /* silent */ }
   }, []);
 
-  // Fetch ads data
-  const fetchAds = useCallback(async () => {
-    setAdsLoading(true);
-    try { const res = await fetch("/api/ads-data"); const data = await res.json(); setAdsData(data); } catch { /* silent */ }
-    setAdsLoading(false);
+  // Fetch keywords data (Prestashop × KV × GSC)
+  const fetchKeywords = useCallback(async (forceRefresh = false) => {
+    setKwLoading(true);
+    try {
+      const url = forceRefresh ? "/api/keywords-data?refresh=true" : "/api/keywords-data";
+      const res = await fetch(url);
+      const data = await res.json();
+      setKwData(data);
+    } catch { /* silent */ }
+    setKwLoading(false);
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchAds(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchAds]);
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchKeywords(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchKeywords]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -675,7 +686,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Ferrolan · Generador de Blog + GSC</title>
+        <title>Ferrolan · Generador de Blog + GSC + Keywords</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="robots" content="noindex" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -715,7 +726,7 @@ export default function Home() {
       </header>
 
       <div style={{ background: C.red, padding: "0.45rem 2.5rem" }}>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + Gemini Imagen 3 · Panel Google Search Console</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + Gemini Imagen 3 · GSC + Keywords Prestashop</p>
       </div>
 
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem", alignItems: "start" }}>
@@ -922,7 +933,7 @@ export default function Home() {
         {/* ─── RIGHT: GSC + ADS PANELS ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
           <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
-          <AdsPanel adsData={adsData} adsLoading={adsLoading} onRefresh={fetchAds} onSelectTopic={handleSelectTopic} C={C} />
+          <KeywordsPanel kwData={kwData} kwLoading={kwLoading} onRefresh={() => fetchKeywords(true)} onSelectTopic={handleSelectTopic} C={C} />
         </div>
       </div>
     </>
