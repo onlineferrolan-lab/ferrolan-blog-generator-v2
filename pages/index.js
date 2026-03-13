@@ -501,7 +501,7 @@ export default function Home() {
   const [imagenes, setImagenes] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [imageError, setImageError] = useState("");
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const [gscData, setGscData] = useState(null);
   const [gscLoading, setGscLoading] = useState(true);
   const [gscError, setGscError] = useState("");
