@@ -226,7 +226,7 @@ Responde SOLO con JSON válido, sin explicaciones ni markdown. El formato debe s
   try {
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -242,9 +242,32 @@ Responde SOLO con JSON válido, sin explicaciones ni markdown. El formato debe s
       // Find last }
       const jsonEnd = cleaned.lastIndexOf("}");
       if (jsonEnd > 0) cleaned = cleaned.slice(0, jsonEnd + 1);
-      return JSON.parse(cleaned);
+
+      // Try to parse as-is
+      try {
+        return JSON.parse(cleaned);
+      } catch {
+        // If truncated, try to close the JSON gracefully
+        // Count open brackets to repair
+        let repaired = cleaned;
+        const openBrackets = (repaired.match(/\[/g) || []).length;
+        const closeBrackets = (repaired.match(/\]/g) || []).length;
+        const openBraces = (repaired.match(/\{/g) || []).length;
+        const closeBraces = (repaired.match(/\}/g) || []).length;
+
+        // Remove trailing comma or partial field
+        repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "");
+        repaired = repaired.replace(/,\s*$/, "");
+
+        // Close missing brackets/braces
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
+        if (!repaired.endsWith("}")) repaired += "}";
+
+        return JSON.parse(repaired);
+      }
     } catch (parseErr) {
-      console.error("JSON parse error:", parseErr.message, "Raw response (first 300):", text.slice(0, 300));
+      console.error("JSON parse error:", parseErr.message, "Raw (first 300):", text.slice(0, 300));
       return { keywords: [], _parseError: true, _raw: text.slice(0, 200) };
     }
   } catch (apiErr) {
