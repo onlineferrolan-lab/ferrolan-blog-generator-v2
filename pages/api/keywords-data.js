@@ -223,21 +223,33 @@ Responde SOLO con JSON válido, sin explicaciones ni markdown. El formato debe s
 
   const client = new Anthropic({ apiKey });
 
-  const message = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2048,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const text = message.content[0]?.text || "";
-
-  // Parse JSON
   try {
-    const cleaned = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(cleaned);
-  } catch {
-    console.error("Failed to parse Claude keywords response:", text.slice(0, 200));
-    return null;
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = message.content[0]?.text || "";
+
+    // Parse JSON — handle various Claude response formats
+    try {
+      // Remove markdown fences, leading/trailing whitespace
+      let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      // If Claude added any text before the JSON, find the first {
+      const jsonStart = cleaned.indexOf("{");
+      if (jsonStart > 0) cleaned = cleaned.slice(jsonStart);
+      // Find last }
+      const jsonEnd = cleaned.lastIndexOf("}");
+      if (jsonEnd > 0) cleaned = cleaned.slice(0, jsonEnd + 1);
+      return JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.error("JSON parse error:", parseErr.message, "Raw response (first 300):", text.slice(0, 300));
+      return { keywords: [], _parseError: true, _raw: text.slice(0, 200) };
+    }
+  } catch (apiErr) {
+    console.error("Anthropic API error:", apiErr.message);
+    return { keywords: [], _apiError: apiErr.message };
   }
 }
 
@@ -348,10 +360,15 @@ export default async function handler(req, res) {
     // Generate keywords with Claude
     const result = await generateKeywords(categories, articles, gscQueries);
 
-    if (!result || !result.keywords) {
+    if (!result || !result.keywords || result.keywords.length === 0) {
+      const detail = result?._apiError
+        ? `Error API Claude: ${result._apiError}`
+        : result?._parseError
+        ? `Error parseando respuesta de Claude: ${result._raw || "sin datos"}`
+        : "Error generando keywords con Claude.";
       return res.status(200).json({
         configured: true,
-        error: "Error generando keywords con Claude.",
+        error: detail,
         categories: categories.map((c) => c.name),
       });
     }
