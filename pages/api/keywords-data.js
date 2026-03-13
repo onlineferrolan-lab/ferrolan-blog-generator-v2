@@ -191,24 +191,47 @@ async function generateKeywords(categories, articles, gscQueries) {
           .join("\n")
       : "Sin datos de GSC disponibles.";
 
+  // Build set of GSC query strings for deduplication
+  const gscQuerySet = new Set(Object.keys(gscQueries).map(q => q.toLowerCase()));
+
   const prompt = `Eres un experto SEO para Ferrolan, distribuidor de materiales de construcción en Barcelona.
 
-CATÁLOGO DE PRODUCTOS (categorías del ecommerce):
+CATÁLOGO DE PRODUCTOS (categorías del ecommerce Prestashop):
 ${catSummary}
 
 ARTÍCULOS YA PUBLICADOS EN EL BLOG:
 ${artSummary}
 
-QUERIES ACTUALES EN GOOGLE SEARCH CONSOLE (top 30):
+QUERIES REALES DE GOOGLE SEARCH CONSOLE (top 30 por impresiones):
 ${topGSC}
 
-TAREA: Genera keywords para el blog cruzando estas tres fuentes. Clasifícalas en tres grupos:
+TAREA: Genera keywords para el blog clasificadas en tres grupos con estas reglas ESTRICTAS:
 
-1. **sin_cubrir**: Keywords basadas en categorías del catálogo que NO tienen artículo dedicado en el blog. Son las más importantes porque representan productos que vendemos pero no tenemos contenido. Genera 8-12.
+═══════════════════════════════════════════════════
+GRUPO 1 — "sin_cubrir" (8-12 keywords)
+═══════════════════════════════════════════════════
+Fuente: EXCLUSIVAMENTE el catálogo de Prestashop.
+Regla: Construye keywords a partir de los nombres de categorías y subcategorías del catálogo.
+PROHIBIDO incluir aquí cualquier query que ya aparezca en el listado de GSC.
+PROHIBIDO incluir queries sobre temas ya cubiertos por artículos del blog.
+Objetivo: detectar productos que vendemos pero para los que NO tenemos contenido.
 
-2. **oportunidades**: Keywords donde ya hay algo de presencia en GSC pero se podría mejorar con un artículo dedicado o mejor optimizado. Busca queries con muchas impresiones pero posición > 10 o sin artículo directo. Genera 5-8.
+═══════════════════════════════════════════════════
+GRUPO 2 — "oportunidad" (5-8 keywords)
+═══════════════════════════════════════════════════
+Fuente: EXCLUSIVAMENTE queries del listado de GSC proporcionado.
+Criterio de selección (al menos uno debe cumplirse):
+  - Posición > 10 (podemos mejorar con un artículo dedicado)
+  - Muchas impresiones pero CTR bajo (búsquedas que no captamos)
+  - No existe aún un artículo dedicado en el blog sobre esa query
+OBLIGATORIO: usa las frases de búsqueda tal como aparecen en GSC, no las inventes.
 
-3. **sugeridas**: Keywords long-tail creativas que combinen productos del catálogo con intención de búsqueda informativa (cómo elegir, diferencias, guía, tendencias, etc). Genera 6-10.
+═══════════════════════════════════════════════════
+GRUPO 3 — "sugerida" (6-10 keywords)
+═══════════════════════════════════════════════════
+Fuente: Creatividad + catálogo + tendencias del sector.
+Keywords long-tail informativas: "cómo elegir X", "diferencias entre X e Y", "guía de X", "tendencias X 2026", etc.
+Pueden ser completamente nuevas, sin estar en GSC ni en categorías directas.
 
 Para cada keyword incluye:
 - keyword: la frase de búsqueda
