@@ -1,30 +1,10 @@
 import { kv } from "@vercel/kv";
+import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
 
 // ─── Save Article API ──────────────────────────────────────────────────────
 // Solo guarda artículos que el usuario decide publicar explícitamente.
 // Esto alimenta el historial que generate.js inyecta en el prompt de Claude
 // para evitar repetir temas o enfoques.
-
-function extractSlug(text) {
-  const match = text.match(/slug[^:]*:\s*([^\n]+)/i);
-  return match ? match[1].trim().toLowerCase().replace(/[^a-z0-9-]/g, "-") : null;
-}
-
-function extractTitle(text) {
-  const match = text.match(/^#\s+(.+)/m);
-  return match ? match[1].trim() : null;
-}
-
-function extractMetaDescription(text) {
-  const match = text.match(/meta\s*descripci[oó]n[^:]*:\s*([^\n]+)/i);
-  return match ? match[1].trim() : null;
-}
-
-function extractTags(text) {
-  const match = text.match(/etiquetas?[^:]*:\s*([^\n]+)/i);
-  if (!match) return [];
-  return match[1].split(",").map((t) => t.trim()).filter(Boolean).slice(0, 5);
-}
 
 export default async function handler(req, res) {
   // ─── POST: Guardar artículo ───
