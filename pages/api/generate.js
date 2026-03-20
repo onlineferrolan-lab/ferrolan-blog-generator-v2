@@ -1,19 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { kv } from "@vercel/kv";
+import { extractSlug, extractTitle } from "../../lib/article-utils";
 
 // ─── Helpers KV ─────────────────────────────────────────────────────────────
-
-// Extrae el slug del bloque meta SEO que genera Claude al final del artículo
-function extractSlug(text) {
-  const match = text.match(/slug[^:]*:\s*([^\n]+)/i);
-  return match ? match[1].trim().toLowerCase().replace(/[^a-z0-9-]/g, "-") : null;
-}
-
-// Extrae el título H1 del artículo generado
-function extractTitle(text) {
-  const match = text.match(/^#\s+(.+)/m);
-  return match ? match[1].trim() : null;
-}
 
 // Guarda el artículo en KV después de generarlo
 async function saveArticle(tema, categoria, text) {
