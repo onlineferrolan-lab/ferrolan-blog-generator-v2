@@ -508,6 +508,23 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
     );
   }
 
+  // Loading state (first activation — kwData is still null)
+  if (kwLoading && !kwData) {
+    return (
+      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
+        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
+        </div>
+        <div style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
+          <div style={{ width: 40, height: 40, border: `3px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
+          <div style={{ fontSize: "0.92rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", marginBottom: "0.3rem" }}>Analizando catálogo...</div>
+          <div style={{ fontSize: "0.82rem", color: C.muted, lineHeight: 1.5 }}>Prestashop → GSC → Historial → Claude</div>
+        </div>
+      </div>
+    );
+  }
+
   // Not configured
   if (!kwData || !kwData.configured) {
     return (
