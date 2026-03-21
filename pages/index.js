@@ -193,7 +193,7 @@ function ImagePalette({ imagenes, loadingImages, onGenerate, hasArticle, onDragS
           <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
             <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.75rem" }} />
             <div style={{ color: C.dark, fontWeight: 700, fontFamily: "'Oswald', sans-serif", fontSize: "0.85rem", marginBottom: "0.25rem" }}>Generando 4 imágenes...</div>
-            <div style={{ color: C.muted, fontSize: "0.8rem" }}>Claude diseña los prompts · Gemini las renderiza</div>
+            <div style={{ color: C.muted, fontSize: "0.8rem" }}>Claude diseña los prompts · OpenAI las renderiza</div>
           </div>
         )}
 
@@ -977,7 +977,7 @@ export default function Home() {
         fetchArticles();
         setTimeout(() => setPublishResult(null), 10000);
       } else {
-        setError(data.error || "Error al publicar en WordPress.");
+        setError(data.error || "Error al subir borrador a WordPress.");
       }
     } catch { setError("Error de conexión al publicar."); }
     setPublishing(false);
@@ -1060,7 +1060,7 @@ export default function Home() {
       </header>
 
       <div style={{ background: C.red, padding: "0.45rem 2.5rem" }}>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + Gemini Imagen 3 · GSC + Keywords Prestashop</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + OpenAI Images · GSC + Keywords Prestashop</p>
       </div>
 
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
@@ -1194,7 +1194,7 @@ export default function Home() {
                 </div>
                 )}
 
-                {/* Bottom bar with Regenerar + Publicar + Programar */}
+                {/* Bottom bar with Regenerar + Guardar + Programar + Borrador WP */}
                 <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", background: C.light }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                     <button onClick={generarArticulo}
@@ -1219,12 +1219,12 @@ export default function Home() {
                       style={{ background: publishResult ? "#DC2626" : publishing ? "#991B1B" : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: publishing ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
                       onMouseOver={e => !publishing && !publishResult && (e.currentTarget.style.background = C.redDark)}
                       onMouseOut={e => !publishing && !publishResult && (e.currentTarget.style.background = C.red)}>
-                      {publishResult ? <span className="save-check">✓ En WordPress</span> : publishing ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Publicando...</> : <>🌐 Publicar en WP</>}
+                      {publishResult ? <span className="save-check">✓ Borrador en WP</span> : publishing ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Subiendo...</> : <>📝 Borrador WP</>}
                     </button>
 
                     <span style={{ flex: 1 }} />
                     <span style={{ fontSize: "0.82rem", color: C.muted }}>
-                      {publishResult ? <a href={publishResult.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Ver en WordPress →</a> : scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
+                      {publishResult ? <a href={publishResult.wpEditLink || publishResult.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Editar borrador en WP →</a> : scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
                     </span>
                   </div>
 
