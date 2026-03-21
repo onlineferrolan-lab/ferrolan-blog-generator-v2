@@ -3,7 +3,7 @@ import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "
 import { markdownToHtml } from "../../lib/markdown-to-html";
 
 // ─── Publish Now API ────────────────────────────────────────────────────────
-// Publica un artículo directamente en WordPress sin esperar al cron.
+// Sube un artículo a WordPress como BORRADOR para revisión final.
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -62,11 +62,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. Crear el post
+    // 2. Crear el post como BORRADOR
     const postData = {
       title: titulo,
       content: htmlContent,
-      status: "publish",
+      status: "draft",
       slug: slug || undefined,
       excerpt: metaDescription || undefined,
       tags: tagIds.length > 0 ? tagIds : undefined,
@@ -102,6 +102,7 @@ export default async function handler(req, res) {
       contenido: articulo,
       wpPostId: wpPost.id,
       wpLink: wpPost.link,
+      wpStatus: "draft",
     }));
     await kv.lpush("articles:index", articleId);
 
@@ -109,10 +110,12 @@ export default async function handler(req, res) {
       published: true,
       wpPostId: wpPost.id,
       wpLink: wpPost.link,
+      wpEditLink: `${wpUrl.replace(/\/$/, "")}/wp-admin/post.php?post=${wpPost.id}&action=edit`,
       titulo,
+      status: "draft",
     });
   } catch (err) {
     console.error("Publish error:", err);
-    return res.status(500).json({ error: "Error al publicar: " + err.message });
+    return res.status(500).json({ error: "Error al subir borrador: " + err.message });
   }
 }
