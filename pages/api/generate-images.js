@@ -75,41 +75,43 @@ Los prompts deben estar en inglés y ser muy específicos y descriptivos.`;
   }
 }
 
-// ─── Llama a Gemini 2.0 Flash Image (tier gratuito) ──────────────────────────
+// ─── Llama a OpenAI Image Generation API (gpt-image-1) ──────────────────────
 
-async function generateImageWithGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+async function generateImageWithOpenAI(prompt) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const url = "https://api.openai.com/v1/images/generations";
 
   const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+    model: "gpt-image-1",
+    prompt: prompt,
+    n: 1,
+    size: "1024x1024",
   };
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Gemini error ${res.status}: ${err}`);
+    throw new Error(`OpenAI Image API error ${res.status}: ${err}`);
   }
 
   const data = await res.json();
 
-  // Buscar la parte de imagen en la respuesta
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith("image/"));
+  // La respuesta incluye data[0].b64_json con la imagen en base64
+  const imageData = data?.data?.[0]?.b64_json;
 
-  if (!imagePart) {
-    throw new Error("No image returned from Gemini");
+  if (!imageData) {
+    throw new Error("No image returned from OpenAI");
   }
 
-  const mimeType = imagePart.inlineData.mimeType;
-  const base64 = imagePart.inlineData.data;
-  return `data:${mimeType};base64,${base64}`;
+  return `data:image/png;base64,${imageData}`;
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
@@ -129,8 +131,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada" });
   }
 
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: "GEMINI_API_KEY no configurada" });
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada" });
   }
 
   try {
@@ -141,10 +143,10 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No se pudieron generar los prompts de imagen" });
     }
 
-    // 2. Gemini genera las 4 imágenes en paralelo
+    // 2. OpenAI genera las 4 imágenes en paralelo
     const imageKeys = ["imagen1", "imagen2", "imagen3", "imagen4"].filter(k => prompts[k]?.prompt);
     const imageResults = await Promise.all(
-      imageKeys.map(k => generateImageWithGemini(prompts[k].prompt))
+      imageKeys.map(k => generateImageWithOpenAI(prompts[k].prompt))
     );
 
     const imagenes = imageKeys.map((k, i) => ({
