@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, notas } = req.body;
+  const { tema, categoria, keywords, tono, contexto, researchData } = req.body;
 
   if (!tema || !categoria) {
     return res.status(400).json({ error: "Tema y categoría son obligatorios" });
@@ -137,7 +137,17 @@ export default async function handler(req, res) {
 **Categoría:** ${categoria}
 **Tono:** ${tono || "Informativo / Educativo"}
 **Keywords SEO a incluir:** ${keywords || "los que consideres más relevantes para el tema"}
-${notas ? `**Notas adicionales:** ${notas}` : ""}
+${contexto ? `**Contexto e idea concreta del artículo:** ${contexto}` : ""}
+${researchData ? `
+**INVESTIGACIÓN PREVIA DEL TEMA:**
+- Secciones que cubren los competidores: ${researchData.competitorInsights?.commonSections?.join(", ") || "No disponible"}
+- Formato dominante: ${researchData.competitorInsights?.contentFormat || "No disponible"}
+- Gaps de contenido identificados: ${researchData.gaps?.join("; ") || "No disponible"}
+- Preguntas frecuentes (PAA): ${researchData.peopleAlsoAsk?.join("; ") || "No disponible"}
+- Ángulo recomendado: ${researchData.suggestedAngle || "No disponible"}
+- Keywords adicionales: ${researchData.additionalKeywords?.join(", ") || "No disponible"}
+
+IMPORTANTE: Usa esta investigación para crear un artículo que cubra los gaps identificados, responda las preguntas frecuentes y siga el ángulo recomendado. Diferénciate de lo que ya cubre la competencia.` : ""}
 
 Genera el artículo completo siguiendo todas las instrucciones de estilo editorial. Recuerda consultar el historial de artículos existentes para asegurarte de que el enfoque es nuevo y diferenciado.`;
 

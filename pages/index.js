@@ -668,6 +668,267 @@ function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
   );
 }
 
+// ─── SEO Analysis Panel ──────────────────────────────────────────────────────
+
+function SEOPanel({ articulo, tema, keywords, C }) {
+  const [seoData, setSeoData] = useState(null);
+  const [seoLoading, setSeoLoading] = useState(false);
+  const [seoError, setSeoError] = useState("");
+  const [metaData, setMetaData] = useState(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [metaError, setMetaError] = useState("");
+  const [copiedMeta, setCopiedMeta] = useState(null);
+  const [tab, setTab] = useState("seo");
+
+  const analizarSEO = async () => {
+    setSeoLoading(true);
+    setSeoError("");
+    try {
+      const res = await fetch("/api/seo-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articulo, tema, keywords }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error en el análisis SEO");
+      setSeoData(data);
+    } catch (e) {
+      setSeoError(e.message);
+    } finally {
+      setSeoLoading(false);
+    }
+  };
+
+  const generarMetas = async () => {
+    setMetaLoading(true);
+    setMetaError("");
+    try {
+      const res = await fetch("/api/meta-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articulo, tema, keywords }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error generando metas");
+      setMetaData(data);
+    } catch (e) {
+      setMetaError(e.message);
+    } finally {
+      setMetaLoading(false);
+    }
+  };
+
+  const copyText = (text, id) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedMeta(id);
+    setTimeout(() => setCopiedMeta(null), 1800);
+  };
+
+  const scoreColor = (score) => score >= 80 ? C.green : score >= 60 ? C.orange : C.red;
+  const issueColor = (type) => type === "error" ? C.red : type === "warning" ? C.orange : C.blue;
+  const issueBg = (type) => type === "error" ? C.redLight : type === "warning" ? C.orangeLight : C.blueLight;
+  const enfoqueBadge = { curiosidad: C.blue, beneficio: C.green, problema: C.orange, autoridad: C.red };
+
+  const tabStyle = (t) => ({
+    padding: "0.4rem 0.9rem", borderRadius: 6, border: "none",
+    background: tab === t ? C.red : "transparent",
+    color: tab === t ? "#FFF" : "#AAA",
+    fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif",
+    fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", flex: 1,
+  });
+
+  return (
+    <div style={{ marginTop: "0.75rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
+      <div style={{ background: C.panelHeader, padding: "0.65rem 1.1rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          ✦ Análisis SEO
+        </span>
+        <div style={{ display: "flex", gap: "0.2rem" }}>
+          {[["seo", "SEO"], ["meta", "Metas"]].map(([val, label]) => (
+            <button key={val} onClick={() => setTab(val)} style={tabStyle(val)}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "0.85rem 1rem" }}>
+        {/* ── SEO TAB ── */}
+        {tab === "seo" && (
+          <>
+            {!seoData && !seoLoading && (
+              <button onClick={analizarSEO}
+                style={{ width: "100%", background: C.redLight, color: C.red, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.7rem", fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                onMouseOver={e => { e.currentTarget.style.background = C.red; e.currentTarget.style.color = "#FFF"; }}
+                onMouseOut={e => { e.currentTarget.style.background = C.redLight; e.currentTarget.style.color = C.red; }}>
+                🔎 Analizar SEO
+              </button>
+            )}
+
+            {seoLoading && (
+              <div style={{ textAlign: "center", padding: "1rem" }}>
+                <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.5rem" }} />
+                <div style={{ fontSize: "0.82rem", color: C.muted }}>Analizando artículo...</div>
+              </div>
+            )}
+
+            {seoError && (
+              <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", color: C.red, fontSize: "0.82rem", fontWeight: 600 }}>⚠ {seoError}</div>
+            )}
+
+            {seoData && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                {/* Score */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.75rem 1rem" }}>
+                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${scoreColor(seoData.score)}20`, border: `3px solid ${scoreColor(seoData.score)}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: "1.1rem", fontWeight: 800, color: scoreColor(seoData.score), fontFamily: "'Oswald', sans-serif" }}>{seoData.score}</span>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "0.95rem", color: scoreColor(seoData.score), fontFamily: "'Oswald', sans-serif" }}>{seoData.scoreLabel}</div>
+                    <div style={{ fontSize: "0.75rem", color: C.muted, marginTop: "0.1rem" }}>
+                      {seoData.wordCount} palabras · Densidad KW: {seoData.keywordDensity}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Heading structure */}
+                {seoData.headingStructure && (
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Estructura</div>
+                    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                      {[["H1", seoData.headingStructure.h1Count], ["H2", seoData.headingStructure.h2Count], ["H3", seoData.headingStructure.h3Count]].map(([tag, count]) => (
+                        <span key={tag} style={{ display: "inline-flex", alignItems: "center", gap: "0.2rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.78rem", color: C.mid, fontWeight: 600 }}>
+                          <span style={{ color: count === 1 && tag === "H1" ? C.green : count === 0 && tag === "H1" ? C.red : C.mid }}>{tag}</span>
+                          <span>{count}</span>
+                        </span>
+                      ))}
+                      {seoData.suggestedSlug && (
+                        <span style={{ display: "inline-block", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.72rem", color: C.blue, fontFamily: "monospace" }}>
+                          /{seoData.suggestedSlug}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Strengths */}
+                {seoData.strengths?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Puntos fuertes</div>
+                    <ul style={{ margin: 0, paddingLeft: "1.1rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                      {seoData.strengths.map((s, i) => <li key={i} style={{ fontSize: "0.82rem", color: C.green, lineHeight: 1.4 }}>{s}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Issues */}
+                {seoData.issues?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Problemas detectados</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                      {seoData.issues.map((issue, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem", background: issueBg(issue.type), border: `1px solid ${issueColor(issue.type)}30`, borderRadius: 7, padding: "0.4rem 0.6rem" }}>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 800, color: issueColor(issue.type), flexShrink: 0, marginTop: "0.05rem" }}>
+                            {issue.type === "error" ? "✖" : issue.type === "warning" ? "⚠" : "ℹ"}
+                          </span>
+                          <span style={{ fontSize: "0.8rem", color: C.dark, lineHeight: 1.4 }}>{issue.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick fixes */}
+                {seoData.quickFixes?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Fixes rápidos</div>
+                    <ul style={{ margin: 0, paddingLeft: "1.1rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                      {seoData.quickFixes.map((f, i) => <li key={i} style={{ fontSize: "0.82rem", color: C.mid, lineHeight: 1.4 }}>{f}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                <button onClick={analizarSEO} style={{ alignSelf: "flex-end", background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>↺ Re-analizar</button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── META TAB ── */}
+        {tab === "meta" && (
+          <>
+            {!metaData && !metaLoading && (
+              <button onClick={generarMetas}
+                style={{ width: "100%", background: C.blueLight, color: C.blue, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.7rem", fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                onMouseOver={e => { e.currentTarget.style.background = C.blue; e.currentTarget.style.color = "#FFF"; }}
+                onMouseOut={e => { e.currentTarget.style.background = C.blueLight; e.currentTarget.style.color = C.blue; }}>
+                ✎ Generar meta títulos
+              </button>
+            )}
+
+            {metaLoading && (
+              <div style={{ textAlign: "center", padding: "1rem" }}>
+                <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.5rem" }} />
+                <div style={{ fontSize: "0.82rem", color: C.muted }}>Generando opciones de meta...</div>
+              </div>
+            )}
+
+            {metaError && (
+              <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", color: C.red, fontSize: "0.82rem", fontWeight: 600 }}>⚠ {metaError}</div>
+            )}
+
+            {metaData?.options && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {metaData.options.map((opt, i) => (
+                  <div key={i} style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.75rem 0.9rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                      <span style={{ fontSize: "0.65rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: enfoqueBadge[opt.enfoque] || C.muted, background: `${enfoqueBadge[opt.enfoque] || C.muted}15`, padding: "0.1rem 0.4rem", borderRadius: 4 }}>
+                        {opt.enfoque}
+                      </span>
+                      {opt.nota && <span style={{ fontSize: "0.7rem", color: C.muted, fontStyle: "italic", maxWidth: "60%", textAlign: "right", lineHeight: 1.3 }}>{opt.nota}</span>}
+                    </div>
+
+                    {/* Meta título */}
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.2rem" }}>
+                        <span style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Meta título</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <span style={{ fontSize: "0.68rem", color: opt.tituloChars > 60 ? C.red : opt.tituloChars >= 50 ? C.green : C.orange, fontWeight: 700 }}>
+                            {opt.tituloChars || opt.titulo?.length} car
+                          </span>
+                          <button onClick={() => copyText(opt.titulo, `t${i}`)} style={{ background: "none", border: "none", cursor: "pointer", color: copiedMeta === `t${i}` ? C.green : C.muted, fontSize: "0.75rem", padding: 0 }}>
+                            {copiedMeta === `t${i}` ? "✓" : "⎘"}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "0.88rem", fontWeight: 600, color: C.dark, lineHeight: 1.4, wordBreak: "break-word" }}>{opt.titulo}</div>
+                    </div>
+
+                    {/* Meta descripción */}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.2rem" }}>
+                        <span style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Meta descripción</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <span style={{ fontSize: "0.68rem", color: opt.descripcionChars > 160 ? C.red : opt.descripcionChars >= 140 ? C.green : C.orange, fontWeight: 700 }}>
+                            {opt.descripcionChars || opt.descripcion?.length} car
+                          </span>
+                          <button onClick={() => copyText(opt.descripcion, `d${i}`)} style={{ background: "none", border: "none", cursor: "pointer", color: copiedMeta === `d${i}` ? C.green : C.muted, fontSize: "0.75rem", padding: 0 }}>
+                            {copiedMeta === `d${i}` ? "✓" : "⎘"}
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "0.82rem", color: C.mid, lineHeight: 1.5, wordBreak: "break-word" }}>{opt.descripcion}</div>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={generarMetas} style={{ alignSelf: "flex-end", background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>↺ Regenerar opciones</button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Markdown Editor (split pane: textarea + live preview) ──────────────────
 
 function MarkdownEditor({ value, onChange, C }) {
@@ -809,8 +1070,15 @@ export default function Home() {
   const [categoria, setCategoria] = useState("");
   const [keywords, setKeywords] = useState("");
   const [tono, setTono] = useState(TONOS[0]);
-  const [notas, setNotas] = useState("");
+  const [contexto, setContexto] = useState("");
   const [articulo, setArticulo] = useState("");
+
+  // Research state
+  const [researchData, setResearchData] = useState(null);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState("");
+  const [includeResearch, setIncludeResearch] = useState(true);
+  const [researchExpanded, setResearchExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -888,14 +1156,33 @@ export default function Home() {
 
   const handleSelectTopic = ({ tema: t, categoria: c, keywords: k }) => {
     setTema(t); if (c) setCategoria(c); if (k) setKeywords(k);
+    setResearchData(null); setResearchError(""); setContexto("");
     document.querySelector(".form-column")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const investigarTema = async () => {
+    if (!tema) { setResearchError("Introduce un tema antes de investigar."); return; }
+    setResearchLoading(true); setResearchError(""); setResearchData(null);
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tema, categoria, keywords, contexto }),
+      });
+      const data = await res.json();
+      if (data.error) setResearchError(data.error);
+      else { setResearchData(data); setResearchExpanded(true); }
+    } catch { setResearchError("Error de conexión al investigar."); }
+    setResearchLoading(false);
   };
 
   const generarArticulo = async () => {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, keywords, tono, notas }) });
+      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        tema, categoria, keywords, tono, contexto,
+        ...(includeResearch && researchData ? { researchData } : {}),
+      }) });
       const data = await res.json();
       if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); }
       else setError(data.error || "Error al generar el artículo.");
@@ -1066,7 +1353,7 @@ export default function Home() {
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
-        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start" }}>
+        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
           <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
             <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1098,7 +1385,112 @@ export default function Home() {
               <div><label style={labelStyle}>Categoría *</label><select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}><option value="">Selecciona categoría...</option>{CATEGORIAS.map(g => <optgroup key={g.group} label={g.group}>{g.items.map(item => <option key={item} value={item}>{item}</option>)}</optgroup>)}</select></div>
               <div><label style={labelStyle}>Keywords SEO <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Ej: suelo porcelánico, exterior" style={inputStyle} /></div>
               <div><label style={labelStyle}>Tono</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{TONOS.map(t => <button key={t} onClick={() => setTono(t)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: tono === t ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: tono === t ? C.redLight : C.cardBg, color: tono === t ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: tono === t ? 700 : 500 }}>{t}</button>)}</div></div>
-              <div><label style={labelStyle}>Notas <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><textarea value={notas} onChange={e => setNotas(e.target.value)} placeholder="Productos, datos técnicos..." rows={2} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} /></div>
+              <div>
+                <label style={labelStyle}>Contexto / Idea concreta <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(recomendado)</span></label>
+                <textarea value={contexto} onChange={e => setContexto(e.target.value)} placeholder="Describe qué quieres que cubra el artículo: enfoque, puntos clave, productos relevantes, público objetivo, datos específicos..." rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
+              </div>
+
+              {/* ─── Research section ─── */}
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Investigación previa</label>
+                  {researchData && (
+                    <button onClick={() => setResearchExpanded(!researchExpanded)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit" }}>
+                      {researchExpanded ? "▾ Ocultar" : "▸ Mostrar"}
+                    </button>
+                  )}
+                </div>
+
+                {!researchData && !researchLoading && (
+                  <button onClick={investigarTema}
+                    style={{ width: "100%", background: C.blueLight, color: C.blue, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.7rem", fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.background = C.blue; e.currentTarget.style.color = "#FFF"; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = C.blueBorder; e.currentTarget.style.background = C.blueLight; e.currentTarget.style.color = C.blue; }}>
+                    🔍 Investigar tema
+                  </button>
+                )}
+
+                {researchLoading && (
+                  <div style={{ textAlign: "center", padding: "1rem" }}>
+                    <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.5rem" }} />
+                    <div style={{ fontSize: "0.85rem", color: C.muted }}>Analizando competencia y oportunidades...</div>
+                  </div>
+                )}
+
+                {researchError && (
+                  <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", color: C.red, fontSize: "0.85rem", fontWeight: 600 }}>
+                    ⚠ {researchError}
+                  </div>
+                )}
+
+                {researchData && researchExpanded && (
+                  <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem", fontSize: "0.85rem" }}>
+                    {/* Brief summary */}
+                    {researchData.briefSummary && (
+                      <div style={{ marginBottom: "0.7rem", padding: "0.5rem 0.7rem", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: "0.82rem", lineHeight: 1.5, fontWeight: 500 }}>
+                        {researchData.briefSummary}
+                      </div>
+                    )}
+                    {/* Competitor sections */}
+                    {researchData.competitorInsights?.commonSections?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Secciones comunes en SERP</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem" }}>
+                          {researchData.competitorInsights.commonSections.map((s, i) => (
+                            <span key={i} style={{ display: "inline-block", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.78rem", color: C.mid }}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Gaps */}
+                    {researchData.gaps?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Gaps de contenido</div>
+                        <ul style={{ margin: 0, paddingLeft: "1.2rem", color: C.mid, fontSize: "0.82rem", lineHeight: 1.6 }}>
+                          {researchData.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {/* PAA */}
+                    {researchData.peopleAlsoAsk?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Preguntas frecuentes</div>
+                        <ul style={{ margin: 0, paddingLeft: "1.2rem", color: C.blue, fontSize: "0.82rem", lineHeight: 1.6 }}>
+                          {researchData.peopleAlsoAsk.map((q, i) => <li key={i}>{q}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Suggested angle */}
+                    {researchData.suggestedAngle && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Ángulo recomendado</div>
+                        <div style={{ color: C.green, fontWeight: 600, fontSize: "0.82rem", lineHeight: 1.5 }}>{researchData.suggestedAngle}</div>
+                      </div>
+                    )}
+                    {/* Additional keywords — clickable */}
+                    {researchData.additionalKeywords?.length > 0 && (
+                      <div style={{ marginBottom: "0.5rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Keywords adicionales <span style={{ fontWeight: 400, textTransform: "none", color: C.muted }}>(clic para añadir)</span></div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                          {researchData.additionalKeywords.map((k, i) => (
+                            <span key={i} onClick={() => setKeywords(prev => prev ? (prev.includes(k) ? prev : `${prev}, ${k}`) : k)}
+                              style={{ display: "inline-block", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.76rem", color: C.blue, cursor: "pointer", fontWeight: 600 }}
+                              title="Clic para añadir a keywords">{k}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Controls: include toggle + re-research */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: `1px solid ${C.border}` }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", color: C.mid, cursor: "pointer" }}>
+                        <input type="checkbox" checked={includeResearch} onChange={e => setIncludeResearch(e.target.checked)} /> Incluir en generación
+                      </label>
+                      <button onClick={investigarTema} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit" }}>↺ Reinvestigar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {error && <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.65rem 1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {error}</div>}
               <button onClick={generarArticulo} disabled={loading}
                 style={{ background: loading ? C.redDark : C.red, color: "#FFF", border: "none", borderRadius: 10, padding: "0.9rem", fontWeight: 700, fontSize: "0.95rem", cursor: loading ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.07em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
@@ -1110,7 +1502,7 @@ export default function Home() {
 
           <div style={{ marginTop: "0.75rem", background: C.cardBg, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.red}`, borderRadius: "0 10px 10px 0", padding: "0.75rem 1.1rem", transition: "background 0.3s" }}>
             <div style={{ fontSize: "0.78rem", color: C.dark, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.25rem" }}>Cada artículo incluye</div>
-            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA</div>
+            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>Investigación previa · Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA</div>
           </div>
 
           {/* Saved articles history */}
@@ -1270,8 +1662,9 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── RIGHT: GSC + ADS PANELS ─── */}
+        {/* ─── RIGHT: GSC + SEO + ADS PANELS ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
+          {articulo && <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />}
           <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
           <KeywordsPanel kwData={kwData} kwLoading={kwLoading} onRefresh={() => fetchKeywords(true)} onSelectTopic={handleSelectTopic} C={C} />
         </div>
