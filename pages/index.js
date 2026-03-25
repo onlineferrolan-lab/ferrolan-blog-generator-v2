@@ -809,8 +809,15 @@ export default function Home() {
   const [categoria, setCategoria] = useState("");
   const [keywords, setKeywords] = useState("");
   const [tono, setTono] = useState(TONOS[0]);
-  const [notas, setNotas] = useState("");
+  const [contexto, setContexto] = useState("");
   const [articulo, setArticulo] = useState("");
+
+  // Research state
+  const [researchData, setResearchData] = useState(null);
+  const [researchLoading, setResearchLoading] = useState(false);
+  const [researchError, setResearchError] = useState("");
+  const [includeResearch, setIncludeResearch] = useState(true);
+  const [researchExpanded, setResearchExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -888,14 +895,33 @@ export default function Home() {
 
   const handleSelectTopic = ({ tema: t, categoria: c, keywords: k }) => {
     setTema(t); if (c) setCategoria(c); if (k) setKeywords(k);
+    setResearchData(null); setResearchError(""); setContexto("");
     document.querySelector(".form-column")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const investigarTema = async () => {
+    if (!tema) { setResearchError("Introduce un tema antes de investigar."); return; }
+    setResearchLoading(true); setResearchError(""); setResearchData(null);
+    try {
+      const res = await fetch("/api/research", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tema, categoria, keywords, contexto }),
+      });
+      const data = await res.json();
+      if (data.error) setResearchError(data.error);
+      else { setResearchData(data); setResearchExpanded(true); }
+    } catch { setResearchError("Error de conexión al investigar."); }
+    setResearchLoading(false);
   };
 
   const generarArticulo = async () => {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, keywords, tono, notas }) });
+      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        tema, categoria, keywords, tono, contexto,
+        ...(includeResearch && researchData ? { researchData } : {}),
+      }) });
       const data = await res.json();
       if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); }
       else setError(data.error || "Error al generar el artículo.");
@@ -1066,7 +1092,7 @@ export default function Home() {
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
-        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start" }}>
+        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
           <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
             <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1098,7 +1124,112 @@ export default function Home() {
               <div><label style={labelStyle}>Categoría *</label><select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}><option value="">Selecciona categoría...</option>{CATEGORIAS.map(g => <optgroup key={g.group} label={g.group}>{g.items.map(item => <option key={item} value={item}>{item}</option>)}</optgroup>)}</select></div>
               <div><label style={labelStyle}>Keywords SEO <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Ej: suelo porcelánico, exterior" style={inputStyle} /></div>
               <div><label style={labelStyle}>Tono</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{TONOS.map(t => <button key={t} onClick={() => setTono(t)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: tono === t ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: tono === t ? C.redLight : C.cardBg, color: tono === t ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: tono === t ? 700 : 500 }}>{t}</button>)}</div></div>
-              <div><label style={labelStyle}>Notas <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><textarea value={notas} onChange={e => setNotas(e.target.value)} placeholder="Productos, datos técnicos..." rows={2} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} /></div>
+              <div>
+                <label style={labelStyle}>Contexto / Idea concreta <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(recomendado)</span></label>
+                <textarea value={contexto} onChange={e => setContexto(e.target.value)} placeholder="Describe qué quieres que cubra el artículo: enfoque, puntos clave, productos relevantes, público objetivo, datos específicos..." rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
+              </div>
+
+              {/* ─── Research section ─── */}
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Investigación previa</label>
+                  {researchData && (
+                    <button onClick={() => setResearchExpanded(!researchExpanded)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "0.8rem", fontFamily: "inherit" }}>
+                      {researchExpanded ? "▾ Ocultar" : "▸ Mostrar"}
+                    </button>
+                  )}
+                </div>
+
+                {!researchData && !researchLoading && (
+                  <button onClick={investigarTema}
+                    style={{ width: "100%", background: C.blueLight, color: C.blue, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.7rem", fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = C.blue; e.currentTarget.style.background = C.blue; e.currentTarget.style.color = "#FFF"; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = C.blueBorder; e.currentTarget.style.background = C.blueLight; e.currentTarget.style.color = C.blue; }}>
+                    🔍 Investigar tema
+                  </button>
+                )}
+
+                {researchLoading && (
+                  <div style={{ textAlign: "center", padding: "1rem" }}>
+                    <div style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTopColor: C.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.5rem" }} />
+                    <div style={{ fontSize: "0.85rem", color: C.muted }}>Analizando competencia y oportunidades...</div>
+                  </div>
+                )}
+
+                {researchError && (
+                  <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.5rem 0.75rem", color: C.red, fontSize: "0.85rem", fontWeight: 600 }}>
+                    ⚠ {researchError}
+                  </div>
+                )}
+
+                {researchData && researchExpanded && (
+                  <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem", fontSize: "0.85rem" }}>
+                    {/* Brief summary */}
+                    {researchData.briefSummary && (
+                      <div style={{ marginBottom: "0.7rem", padding: "0.5rem 0.7rem", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: "0.82rem", lineHeight: 1.5, fontWeight: 500 }}>
+                        {researchData.briefSummary}
+                      </div>
+                    )}
+                    {/* Competitor sections */}
+                    {researchData.competitorInsights?.commonSections?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Secciones comunes en SERP</div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem" }}>
+                          {researchData.competitorInsights.commonSections.map((s, i) => (
+                            <span key={i} style={{ display: "inline-block", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.78rem", color: C.mid }}>{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Gaps */}
+                    {researchData.gaps?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Gaps de contenido</div>
+                        <ul style={{ margin: 0, paddingLeft: "1.2rem", color: C.mid, fontSize: "0.82rem", lineHeight: 1.6 }}>
+                          {researchData.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {/* PAA */}
+                    {researchData.peopleAlsoAsk?.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Preguntas frecuentes</div>
+                        <ul style={{ margin: 0, paddingLeft: "1.2rem", color: C.blue, fontSize: "0.82rem", lineHeight: 1.6 }}>
+                          {researchData.peopleAlsoAsk.map((q, i) => <li key={i}>{q}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {/* Suggested angle */}
+                    {researchData.suggestedAngle && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Ángulo recomendado</div>
+                        <div style={{ color: C.green, fontWeight: 600, fontSize: "0.82rem", lineHeight: 1.5 }}>{researchData.suggestedAngle}</div>
+                      </div>
+                    )}
+                    {/* Additional keywords — clickable */}
+                    {researchData.additionalKeywords?.length > 0 && (
+                      <div style={{ marginBottom: "0.5rem" }}>
+                        <div style={{ fontWeight: 700, color: C.dark, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Keywords adicionales <span style={{ fontWeight: 400, textTransform: "none", color: C.muted }}>(clic para añadir)</span></div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                          {researchData.additionalKeywords.map((k, i) => (
+                            <span key={i} onClick={() => setKeywords(prev => prev ? (prev.includes(k) ? prev : `${prev}, ${k}`) : k)}
+                              style={{ display: "inline-block", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 6, padding: "0.15rem 0.5rem", fontSize: "0.76rem", color: C.blue, cursor: "pointer", fontWeight: 600 }}
+                              title="Clic para añadir a keywords">{k}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Controls: include toggle + re-research */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.6rem", paddingTop: "0.5rem", borderTop: `1px solid ${C.border}` }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", color: C.mid, cursor: "pointer" }}>
+                        <input type="checkbox" checked={includeResearch} onChange={e => setIncludeResearch(e.target.checked)} /> Incluir en generación
+                      </label>
+                      <button onClick={investigarTema} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit" }}>↺ Reinvestigar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {error && <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.65rem 1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {error}</div>}
               <button onClick={generarArticulo} disabled={loading}
                 style={{ background: loading ? C.redDark : C.red, color: "#FFF", border: "none", borderRadius: 10, padding: "0.9rem", fontWeight: 700, fontSize: "0.95rem", cursor: loading ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.07em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
@@ -1110,7 +1241,7 @@ export default function Home() {
 
           <div style={{ marginTop: "0.75rem", background: C.cardBg, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.red}`, borderRadius: "0 10px 10px 0", padding: "0.75rem 1.1rem", transition: "background 0.3s" }}>
             <div style={{ fontSize: "0.78rem", color: C.dark, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.25rem" }}>Cada artículo incluye</div>
-            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA</div>
+            <div style={{ fontSize: "0.88rem", color: C.mid, lineHeight: 1.6 }}>Investigación previa · Tono informativo · Estructura editorial · Links internos · Meta SEO · 2 imágenes IA</div>
           </div>
 
           {/* Saved articles history */}
