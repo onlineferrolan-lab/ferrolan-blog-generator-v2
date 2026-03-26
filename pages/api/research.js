@@ -82,6 +82,7 @@ Devuelve el análisis competitivo en formato JSON.`;
       return res.status(500).json({ error: "Error al procesar la investigación. Inténtalo de nuevo." });
     }
 
-    return res.status(500).json({ error: "Error al investigar el tema. Inténtalo de nuevo." });
+    const msg = err?.message || err?.error?.message || "Error desconocido";
+    return res.status(500).json({ error: `Error al investigar: ${msg}` });
   }
 }
