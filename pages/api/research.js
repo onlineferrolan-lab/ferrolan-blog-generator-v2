@@ -79,9 +79,10 @@ Devuelve el análisis competitivo en formato JSON.`;
     console.error("Research API error:", err);
 
     if (err instanceof SyntaxError) {
-      return res.status(500).json({ error: "Error al procesar la investigación. Inténtalo de nuevo." });
+      return res.status(500).json({ error: "Error al procesar la respuesta de Claude. Inténtalo de nuevo." });
     }
 
-    return res.status(500).json({ error: "Error al investigar el tema. Inténtalo de nuevo." });
+    const msg = err?.message || err?.error?.message || "Error desconocido";
+    return res.status(500).json({ error: `Error al investigar el tema: ${msg}` });
   }
 }
