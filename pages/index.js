@@ -344,17 +344,31 @@ function BlockRenderer({ block, C }) {
   return <div>{elements}</div>;
 }
 
-// ─── GSC Panel ──────────────────────────────────────────────────────────────
+// ─── Opportunities Panel (GSC + Prestashop unified) ─────────────────────────
 
-function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }) {
-  const [tab, setTab] = useState("sinCubrir");
-  const tabStyle = (t) => ({ padding: "0.45rem 0.6rem", borderRadius: 6, border: "none", background: tab === t ? C.red : "transparent", color: tab === t ? "#FFF" : "#AAA", fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em", whiteSpace: "nowrap", flex: 1, textAlign: "center" });
+function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwData, kwLoading, onRefreshKW, onSelectTopic, C }) {
+  const [tab, setTab] = useState("oportunidades");
+
+  const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : String(n);
   const posColor = (pos) => pos <= 3 ? C.green : pos <= 7 ? C.orange : C.red;
-  const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : n.toString();
-  const handleClick = (item) => onSelectTopic({ tema: item.sugerencia || item.query, categoria: item.categoria || "", keywords: item.query });
+  const prioColor = (p) => p === "alta" ? C.red : p === "media" ? C.orange : C.muted;
+  const prioLabel = (p) => p === "alta" ? "▲ Alta" : p === "media" ? "● Media" : "○ Baja";
 
-  const KWCard = ({ item, bg, borderColor, hoverShadow, badge, badgeColor, badgeBg, extra }) => (
-    <button onClick={() => handleClick(item)} style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+  const handleClickGSC = (item) => onSelectTopic({ tema: item.sugerencia || item.query, categoria: item.categoria || "", keywords: item.query });
+  const handleClickPS = (item) => onSelectTopic({ tema: item.titulo_sugerido || `Guía completa de ${item.keyword}`, categoria: "", keywords: item.keyword });
+
+  const TABS = [
+    { key: "oportunidades", label: "Oportunidades GSC", desc: "Alto volumen, posición mejorable. Clic para generar artículo." },
+    { key: "quickwins",     label: "Quick Wins GSC",    desc: "Ya bien posicionados — mantener y reforzar." },
+    { key: "sinCubrir",     label: "Sin cubrir (PS)",   desc: "Productos del catálogo sin artículo en el blog. Clic para generar." },
+    { key: "sugeridas",     label: "Sugeridas (PS)",    desc: "Keywords long-tail generadas por IA cruzando catálogo y tendencias." },
+    { key: "articulos",     label: "Artículos a revisar", desc: "Artículos con más impresiones. Revisar periódicamente." },
+  ];
+
+  const currentTab = TABS.find(t => t.key === tab);
+
+  const KWCardGSC = ({ item, bg, borderColor, hoverShadow, badge, badgeColor, badgeBg, extra }) => (
+    <button onClick={() => handleClickGSC(item)} style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
       onMouseOver={e => e.currentTarget.style.boxShadow = hoverShadow} onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.query}</span>
@@ -369,45 +383,167 @@ function GSCPanel({ gscData, gscLoading, gscError, onRefresh, onSelectTopic, C }
     </button>
   );
 
+  const KWCardPS = ({ item, bg, borderColor, hoverColor }) => (
+    <button onClick={() => handleClickPS(item)}
+      style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+      onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${hoverColor}20`}
+      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
+        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
+      </div>
+      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
+      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
+        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
+        {item.razon && <span>· {item.razon}</span>}
+      </div>
+    </button>
+  );
+
   return (
     <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-      <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-          <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Panel GSC</span>
+      {/* ── Header ── */}
+      <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+            <span style={{ color: C.panelHeaderText, fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Oportunidades</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {gscData && <span style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", borderRadius: 4, background: gscData.live ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.08)", color: gscData.live ? "#34D399" : "#888", fontWeight: 700 }}>{gscData.live ? "● LIVE" : "● GSC"}</span>}
+            {kwData?.configured && <span style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", borderRadius: 4, background: "rgba(124,58,237,0.2)", color: "#C4B5FD", fontWeight: 700 }}>● PS{kwData.cached ? " cache" : ""}</span>}
+            <button onClick={onRefreshGSC} disabled={gscLoading} style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 5, width: 26, height: 26, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar GSC">↺</button>
+            <button onClick={onRefreshKW} disabled={kwLoading} style={{ background: "rgba(124,58,237,0.2)", color: "#C4B5FD", border: "none", borderRadius: 5, width: 26, height: 26, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar Prestashop">↺</button>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {gscData && <span style={{ fontSize: "0.72rem", padding: "0.18rem 0.55rem", borderRadius: 5, background: gscData.live ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.08)", color: gscData.live ? "#34D399" : "#888", fontWeight: 700 }}>{gscData.live ? "● LIVE" : "● ESTÁTICO"}</span>}
-          <button onClick={onRefresh} disabled={gscLoading} style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar">↺</button>
+
+        {/* ── Stats row ── */}
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          {gscData?.resumen && [
+            ["Clics", formatNum(gscData.resumen.clics)],
+            ["Impr.", formatNum(gscData.resumen.impresiones)],
+            ["CTR", gscData.resumen.ctr + "%"],
+            ["Pos.", gscData.resumen.posicion],
+          ].map(([label, value]) => (
+            <div key={label} style={{ flex: 1, background: "rgba(255,255,255,0.06)", borderRadius: 7, padding: "0.4rem 0.3rem", textAlign: "center" }}>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.panelHeaderText, fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
+              <div style={{ fontSize: "0.6rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "0.15rem" }}>{label}</div>
+            </div>
+          ))}
+          {kwData?.resumen && [
+            ["Sin cubrir", kwData.resumen.sinCubrir],
+            ["Sugeridas", kwData.resumen.sugeridas],
+          ].map(([label, value]) => (
+            <div key={label} style={{ flex: 1, background: "rgba(124,58,237,0.15)", borderRadius: 7, padding: "0.4rem 0.3rem", textAlign: "center" }}>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#C4B5FD", fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
+              <div style={{ fontSize: "0.6rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "0.15rem" }}>{label}</div>
+            </div>
+          ))}
         </div>
       </div>
-      <div style={{ padding: "1.25rem", maxHeight: "55vh", overflowY: "auto" }}>
-        {gscLoading && <div style={{ textAlign: "center", padding: "3rem 1rem" }}><div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} /><div style={{ fontSize: "0.9rem", color: C.muted }}>Cargando datos GSC...</div></div>}
-        {gscError && !gscLoading && <div style={{ background: C.redLight, borderRadius: 8, padding: "0.75rem 1rem", fontSize: "0.9rem", color: C.red }}>⚠ {gscError}</div>}
-        {gscData && !gscLoading && (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1rem" }}>
-              {[["Clics", formatNum(gscData.resumen.clics)], ["Impresiones", formatNum(gscData.resumen.impresiones)], ["CTR medio", gscData.resumen.ctr + "%"], ["Posición", gscData.resumen.posicion]].map(([label, value], i) => (
-                <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.85rem", textAlign: "center", border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: "1.35rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{value}</div>
-                  <div style={{ fontSize: "0.72rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "0.1rem" }}>{label}</div>
+
+      {/* ── Body ── */}
+      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
+
+        {/* ── Dropdown selector ── */}
+        <div style={{ position: "relative", marginBottom: "0.85rem" }}>
+          <select value={tab} onChange={e => setTab(e.target.value)}
+            style={{ width: "100%", appearance: "none", background: C.light, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 2.2rem 0.55rem 0.85rem", fontSize: "0.85rem", color: C.dark, fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", cursor: "pointer", outline: "none" }}>
+            {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+          <span style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: C.muted, fontSize: "0.75rem" }}>▾</span>
+        </div>
+
+        {currentTab && (
+          <p style={{ fontSize: "0.82rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>{currentTab.desc}</p>
+        )}
+
+        {/* ── Loading / error states ── */}
+        {(tab === "oportunidades" || tab === "quickwins" || tab === "articulos") && gscLoading && (
+          <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+            <div style={{ width: 30, height: 30, border: `2.5px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.75rem" }} />
+            <div style={{ fontSize: "0.85rem", color: C.muted }}>Cargando datos GSC...</div>
+          </div>
+        )}
+        {(tab === "oportunidades" || tab === "quickwins" || tab === "articulos") && gscError && !gscLoading && (
+          <div style={{ background: C.redLight, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.red }}>⚠ {gscError}</div>
+        )}
+        {(tab === "sinCubrir" || tab === "sugeridas") && kwLoading && (
+          <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+            <div style={{ width: 30, height: 30, border: `2.5px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.75rem" }} />
+            <div style={{ fontSize: "0.85rem", color: C.muted }}>Analizando catálogo Prestashop...</div>
+          </div>
+        )}
+        {(tab === "sinCubrir" || tab === "sugeridas") && !kwData && !kwLoading && (
+          <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
+            <div style={{ fontSize: "0.85rem", color: C.muted, lineHeight: 1.6, marginBottom: "1rem" }}>Cruza el catálogo de Prestashop con GSC para detectar oportunidades no cubiertas.</div>
+            <button onClick={onRefreshKW}
+              style={{ background: "#7C3AED", color: "#FFF", border: "none", borderRadius: 8, padding: "0.6rem 1.4rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}
+              onMouseOver={e => e.currentTarget.style.background = "#5B21B6"}
+              onMouseOut={e => e.currentTarget.style.background = "#7C3AED"}>
+              ⚡ Analizar keywords
+            </button>
+            <div style={{ fontSize: "0.7rem", color: C.muted, marginTop: "0.6rem" }}>Consume tokens · Resultado cacheado 6h</div>
+          </div>
+        )}
+
+        {/* ── Tab: Oportunidades GSC ── */}
+        {tab === "oportunidades" && gscData && !gscLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {(gscData.oportunidades || []).map((item, i) => (
+              <KWCardGSC key={i} item={item} bg={C.cardBg} borderColor={C.border} hoverShadow={`0 2px 12px ${C.red}20`} badge={`pos ${item.posicion}`} badgeColor={posColor(item.posicion)} badgeBg={`${posColor(item.posicion)}18`} extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.mid, fontStyle: "italic" } } : null} />
+            ))}
+          </div>
+        )}
+
+        {/* ── Tab: Quick Wins GSC ── */}
+        {tab === "quickwins" && gscData && !gscLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {(gscData.quickWins || []).map((item, i) => (
+              <KWCardGSC key={i} item={{ ...item, sugerencia: item.nota }} bg={C.greenLight} borderColor={C.greenBorder} hoverShadow={`0 2px 12px ${C.green}20`} badge={`✓ pos ${item.posicion}`} badgeColor={C.green} badgeBg={`${C.green}18`} extra={item.nota ? { text: `✦ ${item.nota}`, style: { color: C.green, fontWeight: 600 } } : null} />
+            ))}
+          </div>
+        )}
+
+        {/* ── Tab: Sin cubrir (Prestashop) ── */}
+        {tab === "sinCubrir" && kwData?.resumen && !kwLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {(kwData.sinCubrir || []).map((item, i) => <KWCardPS key={i} item={item} bg={C.redLight} borderColor={C.redBorder} hoverColor={C.red} />)}
+            {(kwData.sinCubrir || []).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las categorías del catálogo tienen contenido</div>}
+          </div>
+        )}
+
+        {/* ── Tab: Sugeridas (Prestashop) ── */}
+        {tab === "sugeridas" && kwData?.resumen && !kwLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {(kwData.sugeridas || []).map((item, i) => <KWCardPS key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder} hoverColor={C.blue} />)}
+            {(kwData.sugeridas || []).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay sugerencias adicionales</div>}
+          </div>
+        )}
+
+        {/* ── Tab: Artículos a revisar (GSC) ── */}
+        {tab === "articulos" && gscData && !gscLoading && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {(gscData.articulosActualizar || []).map((item, i) => (
+              <div key={i} style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
+                <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark, marginBottom: "0.3rem", lineHeight: 1.35 }}>{item.pagina}</div>
+                <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.82rem", color: C.muted, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600 }}>{formatNum(item.impresiones)} impr</span>
+                  <span>{formatNum(item.clics)} clics</span>
+                  <span style={{ color: posColor(item.posicion), fontWeight: 600 }}>pos {item.posicion}</span>
+                  <span>CTR {item.ctr}%</span>
                 </div>
-              ))}
-            </div>
-            <div style={{ fontSize: "0.78rem", color: C.muted, textAlign: "center", marginBottom: "1rem" }}>{gscData.resumen.periodo}</div>
-            <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: C.panelHeader, borderRadius: 8, padding: "0.2rem" }}>
-              {[["oportunidades", "Oportunidades"], ["quickwins", "Quick Wins"], ["nuevos", "Nuevos"], ["articulos", "Artículos"]].map(([key, label]) => (
-                <button key={key} onClick={() => setTab(key)} style={tabStyle(key)}>{label}</button>
-              ))}
-            </div>
+                {item.url && <a href={`https://ferrolan.es${item.url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.82rem", color: C.red, textDecoration: "none", marginTop: "0.3rem", display: "inline-block", fontWeight: 600 }}>Ver artículo →</a>}
+              </div>
+            ))}
+          </div>
+        )}
 
-            {tab === "oportunidades" && <div><p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem" }}>Alto volumen, posición mejorable. Clic para generar artículo.</p><div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>{(gscData.oportunidades || []).map((item, i) => <KWCard key={i} item={item} bg={C.cardBg} borderColor={C.border} hoverShadow={`0 2px 12px ${C.red}20`} badge={`pos ${item.posicion}`} badgeColor={posColor(item.posicion)} badgeBg={`${posColor(item.posicion)}18`} extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.mid, fontStyle: "italic" } } : null} />)}</div></div>}
-            {tab === "quickwins" && <div><p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem" }}>Ya bien posicionados — mantener y reforzar.</p><div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>{(gscData.quickWins || []).map((item, i) => <KWCard key={i} item={{ ...item, sugerencia: item.nota }} bg={C.greenLight} borderColor={C.greenBorder} hoverShadow={`0 2px 12px ${C.green}20`} badge={`✓ pos ${item.posicion}`} badgeColor={C.green} badgeBg={`${C.green}18`} extra={item.nota ? { text: `✦ ${item.nota}`, style: { color: C.green, fontWeight: 600 } } : null} />)}</div></div>}
-            {tab === "nuevos" && <div><p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem" }}>Keywords con demanda sin artículo dedicado.</p><div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>{(gscData.nuevosTemasGSC || []).map((item, i) => <KWCard key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder} hoverShadow={`0 2px 12px ${C.blue}20`} badge={`${formatNum(item.impresiones)} impr`} badgeColor={C.blue} badgeBg={`${C.blue}18`} extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.blue, fontWeight: 600 } } : null} />)}</div></div>}
-            {tab === "articulos" && <div><p style={{ fontSize: "0.88rem", color: C.muted, marginBottom: "0.75rem" }}>Artículos con más impresiones. Revisar periódicamente.</p><div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>{(gscData.articulosActualizar || []).map((item, i) => (<div key={i} style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}><div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark, marginBottom: "0.3rem", lineHeight: 1.35 }}>{item.pagina}</div><div style={{ display: "flex", gap: "0.75rem", fontSize: "0.82rem", color: C.muted, flexWrap: "wrap" }}><span style={{ fontWeight: 600 }}>{formatNum(item.impresiones)} impr</span><span>{formatNum(item.clics)} clics</span><span style={{ color: posColor(item.posicion), fontWeight: 600 }}>pos {item.posicion}</span><span>CTR {item.ctr}%</span></div>{item.url && <a href={`https://ferrolan.es${item.url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.82rem", color: C.red, textDecoration: "none", marginTop: "0.3rem", display: "inline-block", fontWeight: 600 }}>Ver artículo →</a>}</div>))}</div></div>}
-
-            {!gscData.live && <div style={{ marginTop: "1rem", padding: "0.65rem 0.85rem", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 8, fontSize: "0.82rem", color: C.orange, lineHeight: 1.45 }}>ⓘ Datos del último análisis manual. Configura credenciales de Google para datos en vivo.</div>}
-          </>
+        {/* ── GSC static notice ── */}
+        {gscData && !gscData.live && (tab === "oportunidades" || tab === "quickwins" || tab === "articulos") && (
+          <div style={{ marginTop: "0.75rem", padding: "0.6rem 0.75rem", background: C.orangeLight, border: `1px solid ${C.orange}30`, borderRadius: 8, fontSize: "0.78rem", color: C.orange, lineHeight: 1.4 }}>
+            ⓘ Datos del último análisis manual. Configura credenciales de Google para datos en vivo.
+          </div>
         )}
       </div>
     </div>
@@ -460,213 +596,6 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
   );
 }
 
-// ─── Keywords Panel (Prestashop × GSC × Blog) ──────────────────────────────
-
-function KeywordsPanel({ kwData, kwLoading, onRefresh, onSelectTopic, C }) {
-  const [tab, setTab] = useState("sinCubrir");
-
-  const tabStyle = (t) => ({
-    padding: "0.45rem 0.6rem", borderRadius: 6, border: "none",
-    background: tab === t ? "#7C3AED" : "transparent",
-    color: tab === t ? "#FFF" : "#AAA",
-    fontSize: "0.78rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif",
-    fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.03em",
-    whiteSpace: "nowrap", flex: 1, textAlign: "center",
-  });
-
-  const prioColor = (p) => p === "alta" ? C.red : p === "media" ? C.orange : C.muted;
-  const prioLabel = (p) => p === "alta" ? "▲ Alta" : p === "media" ? "● Media" : "○ Baja";
-
-  const handleClick = (item) => {
-    const tema = item.titulo_sugerido || `Guía completa de ${item.keyword}`;
-    onSelectTopic({ tema, categoria: "", keywords: item.keyword });
-  };
-
-  // Idle state: panel not yet activated (kwData is null and not loading)
-  if (!kwData && !kwLoading) {
-    return (
-      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
-        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
-        </div>
-        <div style={{ padding: "2rem 1.5rem", textAlign: "center" }}>
-          <div style={{ fontSize: "0.85rem", color: C.muted, lineHeight: 1.6, marginBottom: "1.25rem" }}>
-            Analiza el catálogo de Prestashop cruzándolo con GSC y el historial de artículos para detectar oportunidades de contenido no cubiertas.
-          </div>
-          <button
-            onClick={onRefresh}
-            style={{ background: "#7C3AED", color: "#FFF", border: "none", borderRadius: 8, padding: "0.65rem 1.5rem", fontSize: "0.9rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", transition: "background 0.2s" }}
-            onMouseOver={e => e.currentTarget.style.background = "#5B21B6"}
-            onMouseOut={e => e.currentTarget.style.background = "#7C3AED"}
-          >
-            ⚡ Analizar keywords
-          </button>
-          <div style={{ fontSize: "0.72rem", color: C.muted, marginTop: "0.75rem" }}>Consume tokens de Claude · El resultado se cachea 6h en KV</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Loading state (first activation — kwData is still null)
-  if (kwLoading && !kwData) {
-    return (
-      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
-        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
-        </div>
-        <div style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
-          <div style={{ width: 40, height: 40, border: `3px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
-          <div style={{ fontSize: "0.92rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif", marginBottom: "0.3rem" }}>Analizando catálogo...</div>
-          <div style={{ fontSize: "0.82rem", color: C.muted, lineHeight: 1.5 }}>Prestashop → GSC → Historial → Claude</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Not configured
-  if (!kwData || !kwData.configured) {
-    return (
-      <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
-        <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
-        </div>
-        <div style={{ padding: "1.5rem", textAlign: "center" }}>
-          <div style={{ fontSize: "0.9rem", color: C.muted, lineHeight: 1.5 }}>
-            Configura <code style={{ background: C.light, padding: "0.1rem 0.4rem", borderRadius: 4, fontSize: "0.82rem" }}>PRESTASHOP_API_KEY</code> en Vercel para conectar con el catálogo.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", marginTop: "1rem" }}>
-      {/* Header */}
-      <div style={{ background: "#5B21B6", padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
-          <span style={{ color: "#FFF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Keywords Prestashop</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {kwData.cached && (
-            <span style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.5)", fontWeight: 600, textTransform: "uppercase" }}>cache</span>
-          )}
-          {kwData.generatedAt && (
-            <span style={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.6)" }}>
-              {new Date(kwData.generatedAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
-            </span>
-          )}
-          <button onClick={onRefresh} disabled={kwLoading}
-            style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 6, width: 30, height: 30, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-            title="Regenerar keywords (consulta Prestashop + Claude)">↺</button>
-        </div>
-      </div>
-
-      <div style={{ padding: "1.25rem", maxHeight: "40vh", overflowY: "auto" }}>
-        {kwLoading && (
-          <div style={{ textAlign: "center", padding: "2rem" }}>
-            <div style={{ width: 32, height: 32, border: `2.5px solid ${C.border}`, borderTopColor: "#7C3AED", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1rem" }} />
-            <div style={{ fontSize: "0.9rem", color: C.muted }}>Analizando catálogo Prestashop...</div>
-            <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.3rem" }}>Cruzando con artículos + GSC</div>
-          </div>
-        )}
-
-        {kwData.error && !kwLoading && (
-          <div style={{ background: C.orangeLight, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.orange, lineHeight: 1.4 }}>ⓘ {kwData.error}</div>
-        )}
-
-        {kwData.resumen && !kwLoading && (
-          <>
-            {/* Stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", marginBottom: "1rem" }}>
-              {[
-                ["Sin cubrir", kwData.resumen.sinCubrir],
-                ["Sugeridas", kwData.resumen.sugeridas],
-              ].map(([label, value], i) => (
-                <div key={i} style={{ background: C.light, borderRadius: 10, padding: "0.7rem", textAlign: "center", border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{value}</div>
-                  <div style={{ fontSize: "0.65rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Categories badge row */}
-            {kwData.categoriasPrestashop && (
-              <div style={{ display: "flex", gap: "0.25rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-                {kwData.categoriasPrestashop.map((cat, i) => (
-                  <span key={i} style={{ fontSize: "0.62rem", fontWeight: 600, color: "#7C3AED", background: "rgba(124,58,237,0.1)", padding: "0.12rem 0.4rem", borderRadius: 4 }}>{cat.name}</span>
-                ))}
-              </div>
-            )}
-
-            {/* Tabs */}
-            <div style={{ display: "flex", gap: "0.2rem", marginBottom: "1rem", background: "#5B21B6", borderRadius: 8, padding: "0.2rem" }}>
-              {[["sinCubrir", "Sin cubrir"], ["sugeridas", "Sugeridas"]].map(([key, label]) => (
-                <button key={key} onClick={() => setTab(key)} style={tabStyle(key)}>{label}</button>
-              ))}
-            </div>
-
-            {/* Tab: Sin cubrir */}
-            {tab === "sinCubrir" && (
-              <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Productos del catálogo sin artículo en el blog. Clic para generar.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(kwData.sinCubrir || []).map((item, i) => (
-                    <button key={i} onClick={() => handleClick(item)}
-                      style={{ display: "block", width: "100%", textAlign: "left", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${C.red}20`}
-                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
-                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
-                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
-                        {item.razon && <span>· {item.razon}</span>}
-                      </div>
-                    </button>
-                  ))}
-                  {(kwData.sinCubrir || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las categorías del catálogo tienen contenido</div>}
-                </div>
-              </div>
-            )}
-
-
-            {/* Tab: Sugeridas */}
-            {tab === "sugeridas" && (
-              <div>
-                <p style={{ fontSize: "0.85rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>Keywords long-tail generadas por IA cruzando catálogo y tendencias.</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  {(kwData.sugeridas || []).map((item, i) => (
-                    <button key={i} onClick={() => handleClick(item)}
-                      style={{ display: "block", width: "100%", textAlign: "left", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
-                      onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${C.blue}20`}
-                      onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.keyword}</span>
-                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: prioColor(item.prioridad), background: `${prioColor(item.prioridad)}15`, padding: "0.12rem 0.45rem", borderRadius: 6 }}>{prioLabel(item.prioridad)}</span>
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: C.mid, marginBottom: "0.2rem", lineHeight: 1.35 }}>{item.titulo_sugerido}</div>
-                      <div style={{ display: "flex", gap: "0.5rem", fontSize: "0.75rem", color: C.muted, alignItems: "center" }}>
-                        {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
-                        {item.razon && <span>· {item.razon}</span>}
-                      </div>
-                    </button>
-                  ))}
-                  {(kwData.sugeridas || []).length === 0 && <div style={{ fontSize: "0.88rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay sugerencias adicionales</div>}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── SEO Analysis Panel ──────────────────────────────────────────────────────
 
@@ -1662,11 +1591,14 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── RIGHT: GSC + SEO + ADS PANELS ─── */}
+        {/* ─── RIGHT: SEO + OPPORTUNITIES PANELS ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
           {articulo && <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />}
-          <GSCPanel gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefresh={fetchGSC} onSelectTopic={handleSelectTopic} C={C} />
-          <KeywordsPanel kwData={kwData} kwLoading={kwLoading} onRefresh={() => fetchKeywords(true)} onSelectTopic={handleSelectTopic} C={C} />
+          <OpportunitiesPanel
+            gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
+            kwData={kwData} kwLoading={kwLoading} onRefreshKW={() => fetchKeywords(true)}
+            onSelectTopic={handleSelectTopic} C={C}
+          />
         </div>
       </div>
     </>
