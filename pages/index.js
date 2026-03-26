@@ -1616,11 +1616,15 @@ export default function Home() {
       <header style={{ background: C.cardBg, borderBottom: `3px solid ${C.red}`, padding: "0 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, transition: "background 0.3s" }}>
         <img src="/logo-ferrolan.png" alt="Ferrolan" style={{ height: 38, objectFit: "contain", filter: isDark ? "brightness(1.2)" : "none" }} />
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          {savedArticles.length > 0 && (
-            <span style={{ fontSize: "0.78rem", color: C.muted, fontWeight: 600, fontFamily: "'Oswald', sans-serif" }}>
-              {savedArticles.length} artículo{savedArticles.length !== 1 ? "s" : ""} publicado{savedArticles.length !== 1 ? "s" : ""}
-            </span>
-          )}
+          {savedArticles.length > 0 && (() => {
+            const publicados = savedArticles.filter(a => a.wpStatus !== "draft").length;
+            const borradores = savedArticles.length - publicados;
+            return (
+              <span style={{ fontSize: "0.78rem", color: C.muted, fontWeight: 600, fontFamily: "'Oswald', sans-serif" }}>
+                {publicados} publicado{publicados !== 1 ? "s" : ""}{borradores > 0 ? ` · ${borradores} borrador${borradores !== 1 ? "es" : ""}` : ""}
+              </span>
+            );
+          })()}
           <span style={{ fontSize: "0.82rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "'Oswald', sans-serif" }}>Generador · Herramienta interna</span>
           <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
         </div>

@@ -1,7 +1,9 @@
 import { kv } from "@vercel/kv";
 
 // Palabras clave que indican contenido temporal/noticia
-const PATRON_NOTICIA = /nuevo[s]?\s+(producto|lanzamiento)|event[o]?|lanzamiento|próximo|feria|jornada|oferta|promoción|descuento|novedad|temporada|esta semana|este mes|este año|\d{4}/i;
+// Nota: se usa \b para evitar falsos positivos (ej. "evento" sí, "eventualmente" no)
+// Se excluyen años sueltos (\d{4}) porque muchos artículos evergreen los mencionan
+const PATRON_NOTICIA = /\bnuevos?\s+(producto|lanzamiento)\b|\blanzamiento\b|\bevento\b|\bpróximo\b|\bferia\b|\bjornada\b|\boferta\b|\bpromoción\b|\bdescuento\b|\bnovedad\b|\btemporada\b|\besta semana\b|\beste mes\b|\beste año\b/i;
 
 // Patrones que indican contenido genuinamente evergreen
 const PATRON_EVERGREEN = /cómo|guía|qué es|diferencia|tipos de|consejos|paso a paso|aprende|elegir|instalar|mantener|cuidar|limpiar|comparativa|cuánto cuesta|presupuesto|solución|errores|ventajas/i;
@@ -25,7 +27,8 @@ export default async function handler(req, res) {
     const records = await Promise.all(ids.map((id) => kv.get(id)));
     const articulos = records
       .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+      .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
+      .filter((a) => a.wpStatus !== "draft");
 
     // 2. Criterios para considerar un artículo como candidato evergreen
     // Requisitos:

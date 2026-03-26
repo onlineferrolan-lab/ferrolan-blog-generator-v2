@@ -32,6 +32,7 @@ export default async function handler(req, res) {
           slug: parsed.slug,
           tags: parsed.tags,
           fecha: parsed.fecha,
+          wpStatus: parsed.wpStatus || null,
         };
       })
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
