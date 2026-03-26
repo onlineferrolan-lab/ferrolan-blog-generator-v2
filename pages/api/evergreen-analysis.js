@@ -1,5 +1,15 @@
 import { kv } from "@vercel/kv";
 
+// Palabras clave que indican contenido temporal/noticia
+const PATRON_NOTICIA = /nuevo[s]?\s+(producto|lanzamiento)|event[o]?|lanzamiento|próximo|feria|jornada|oferta|promoción|descuento|novedad|temporada|esta semana|este mes|este año|\d{4}/i;
+
+// Patrones que indican contenido genuinamente evergreen
+const PATRON_EVERGREEN = /cómo|guía|qué es|diferencia|tipos de|consejos|paso a paso|aprende|elegir|instalar|mantener|cuidar|limpiar|comparativa|cuánto cuesta|presupuesto|solución|errores|ventajas/i;
+
+// Mínimo de días para que un artículo pueda considerarse pilar evergreen
+// 90 días = 3 meses, tiempo suficiente para que el contenido madure y demuestre que no es temporal
+const DIAS_MINIMO_PILAR = 90;
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -15,32 +25,57 @@ export default async function handler(req, res) {
     const records = await Promise.all(ids.map((id) => kv.get(id)));
     const articulos = records
       .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
 
-    // 2. Determinar qué es evergreen
-    // Heurística: artículos que tratan temas sin fecha (no noticias/eventos)
-    // Si hay pocos artículos (<10), incluimos todos los no-noticia para que el panel sea útil
-    const umbralDias = articulos.length < 10 ? 0 : 7; // Sin mínimo si hay pocos artículos
+    // 2. Criterios para considerar un artículo como candidato evergreen
+    // Requisitos:
+    //   a) Antigüedad mínima de 90 días: el contenido evergreen necesita tiempo para
+    //      demostrar que no es temporal y para acumular autoridad en buscadores
+    //   b) El título no debe contener patrones de noticia/temporalidad
+    //   c) Idealmente el título sugiere contenido informativo/educativo (guías, consejos, etc.)
     const umbralFecha = new Date();
-    umbralFecha.setDate(umbralFecha.getDate() - umbralDias);
+    umbralFecha.setDate(umbralFecha.getDate() - DIAS_MINIMO_PILAR);
 
     const evergreen = articulos.filter((a) => {
       const fecha = new Date(a.fecha);
-      const suficienteAntiguo = umbralFecha >= fecha;
-      // No incluir si parece una noticia (palabras clave de temporalidad)
-      const esNoticia = /nuevo[s]?\s+(producto|lanzamiento)|event|lanzamiento|próximo|feria|jornada/i.test(a.titulo || "");
-      return suficienteAntiguo && !esNoticia;
+      const esLoSuficientementeAntiguo = fecha <= umbralFecha;
+      const esNoticia = PATRON_NOTICIA.test(a.titulo || "");
+      return esLoSuficientementeAntiguo && !esNoticia;
     });
 
-    // 3. Identificar "pilares" = artículos evergreen más antiguos (más tiempo para acumular tráfico)
-    // Los mostramos como top 8 más antiguos (o menos si hay pocos)
-    const pilares = evergreen.slice(0, Math.min(8, evergreen.length));
+    // 3. Ordenar por antigüedad DESC (más antiguo primero): los artículos más antiguos
+    // tienen más tiempo para haber acumulado enlaces, autoridad y tráfico orgánico
+    const evergreenOrdenado = evergreen.sort(
+      (a, b) => new Date(a.fecha) - new Date(b.fecha)
+    );
 
-    // 4. Extraer categorías/temas cubiertos para identificar gaps
+    // 4. Calcular score de calidad evergreen para cada artículo
+    // Un score más alto indica mayor probabilidad de ser un buen pilar
+    const evergreenConScore = evergreenOrdenado.map((a) => {
+      const diasAntiguo = Math.floor(
+        (new Date() - new Date(a.fecha)) / (1000 * 60 * 60 * 24)
+      );
+      // Bonus por tener patrones de contenido evergreen en el título
+      const tienePatronEvergreen = PATRON_EVERGREEN.test(a.titulo || "");
+      // Score: base por antigüedad (máx 70 puntos) + bonus por patrón (30 puntos)
+      const scoreAntiguedad = Math.min(70, Math.floor(diasAntiguo / 3)); // 1 punto cada 3 días, máx 70
+      const scorePatron = tienePatronEvergreen ? 30 : 0;
+      return {
+        ...a,
+        _scoreEvergreen: scoreAntiguedad + scorePatron,
+        edad: diasAntiguo,
+      };
+    });
+
+    // 5. Top 8 pilares por score (combina antigüedad + calidad del título)
+    const pilares = evergreenConScore
+      .sort((a, b) => b._scoreEvergreen - a._scoreEvergreen)
+      .slice(0, 8);
+
+    // 6. Extraer categorías/temas cubiertos para identificar gaps
     const topicsCovered = [...new Set(articulos.map((a) => a.categoria || "").filter(Boolean))];
 
-    // 5. Definir temas evergreen que típicamente funcionan bien en blogs de materiales
+    // 7. Definir temas evergreen que típicamente funcionan bien en blogs de materiales
     const EVERGREEN_TOPICS = [
       "Cómo elegir azulejos",
       "Guía de instalación de cerámica",
@@ -58,7 +93,7 @@ export default async function handler(req, res) {
       "Reparación de grietas",
     ];
 
-    // 6. Sugerir gaps: temas que son buenos para blog pero no tenemos (aproximado por keywords/título)
+    // 8. Sugerir gaps: temas que son buenos para blog pero no tenemos
     const gaps = EVERGREEN_TOPICS.filter((topic) => {
       const covered = articulos.some(
         (a) =>
@@ -66,14 +101,12 @@ export default async function handler(req, res) {
           a.categoria?.toLowerCase().includes(topic.toLowerCase())
       );
       return !covered;
-    }).slice(0, 4); // Top 4 sugerencias
+    }).slice(0, 4);
 
-    // 7. Para cada pilar, intentar encontrar datos de impacto (simulado, sin acceso a GSC real aquí)
-    const pilaresConMetricas = pilares.map((p, idx) => ({
+    // 9. Calcular impactoEstimado para la visualización (0-100)
+    const pilaresConMetricas = pilares.map((p) => ({
       ...p,
-      // Simular scores basado en antigüedad y posición
-      impactoEstimado: Math.max(50, 100 - idx * 8), // Mayor antigüedad = mayor estimación
-      edad: Math.floor((new Date() - new Date(p.fecha)) / (1000 * 60 * 60 * 24)), // días
+      impactoEstimado: Math.min(100, p._scoreEvergreen),
     }));
 
     return res.status(200).json({

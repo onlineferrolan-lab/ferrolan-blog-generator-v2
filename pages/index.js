@@ -1634,7 +1634,7 @@ export default function Home() {
       {/* ═══  VIEW: PANELS (main dashboard)  ═══════════════════════════════════ */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {view === "panels" && (
-      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 1fr", gap: "1.5rem" }}>
+      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
         <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
