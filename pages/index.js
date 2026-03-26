@@ -1252,7 +1252,9 @@ export default function Home() {
   // Agent pipeline (enhance-article)
   const [enhancing, setEnhancing] = useState(false);
   const [enhanceResult, setEnhanceResult] = useState(null);
-  const [enhanceTab, setEnhanceTab] = useState("links"); // "links" | "headlines" | "keywords"
+  const [enhanceTab, setEnhanceTab] = useState("links"); // "links" | "headlines" | "keywords" | "cro" | "landing"
+  const [croSelected, setCroSelected] = useState(new Set());
+  const [landingSelected, setLandingSelected] = useState(new Set());
 
   // Keywords data (Prestashop)
   const [kwData, setKwData] = useState(null);
@@ -1393,6 +1395,87 @@ export default function Home() {
       setEnhanceTab("links");
     } catch { /* silent */ }
     setEnhancing(false);
+  };
+
+  // Inserta un elemento CRO/Landing en la sección correcta del artículo
+  const aplicarElementoEnArticulo = (element) => {
+    if (!element?.text) return;
+    const { text, placement, position } = element;
+
+    // Extraer nombre de sección de "H2: Nombre" o usar marcadores especiales
+    const h2Match = placement?.match(/H2:\s*(.+)/i);
+    const isIntro  = /^INTRO$/i.test(placement);
+    const isCierre = /^CIERRE$/i.test(placement);
+
+    const lines = articulo.split("\n");
+
+    if (isIntro) {
+      // Insertar tras el H1
+      const h1Idx = lines.findIndex(l => l.match(/^# /));
+      const insertAt = h1Idx >= 0 ? h1Idx + 1 : 0;
+      lines.splice(insertAt, 0, "", text, "");
+      setArticulo(lines.join("\n"));
+      return;
+    }
+
+    if (isCierre || !h2Match) {
+      // Appender al final
+      setArticulo(articulo + "\n\n" + text);
+      return;
+    }
+
+    const targetSection = h2Match[1].trim().toLowerCase();
+    let sectionIdx = -1;
+    let nextH2Idx  = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].match(/^## /)) {
+        const h2text = lines[i].replace(/^## /, "").toLowerCase();
+        if (h2text.includes(targetSection) || targetSection.includes(h2text)) {
+          sectionIdx = i;
+          for (let j = i + 1; j < lines.length; j++) {
+            if (lines[j].match(/^## /)) { nextH2Idx = j; break; }
+          }
+          break;
+        }
+      }
+    }
+
+    if (sectionIdx === -1) {
+      // Sección no encontrada → append al final
+      setArticulo(articulo + "\n\n" + text);
+      return;
+    }
+
+    if (position === "inicio") {
+      lines.splice(sectionIdx + 1, 0, "", text, "");
+    } else if (nextH2Idx !== -1) {
+      lines.splice(nextH2Idx, 0, text, "");
+    } else {
+      lines.push("", text);
+    }
+    setArticulo(lines.join("\n"));
+  };
+
+  const aplicarSeleccionados = (elements, selectedSet) => {
+    // Aplicar todos los elementos seleccionados en orden
+    const toApply = (elements || []).filter(el => selectedSet.has(el.id));
+    if (!toApply.length) return;
+    // Construimos un nuevo artículo aplicando todos en cadena
+    let current = articulo;
+    toApply.forEach(el => {
+      const prev = articulo;
+      aplicarElementoEnArticulo(el);
+      // aplicarElementoEnArticulo usa setArticulo — necesitamos otra estrategia para encadenar
+    });
+    // Estrategia: aplicar uno a uno resetting selected después
+    aplicarElementoEnArticulo(toApply[0]);
+    if (toApply.length > 1) {
+      // Los demás se aplican en cascada con un pequeño timeout para que React re-renderice
+      toApply.slice(1).forEach((el, i) => {
+        setTimeout(() => aplicarElementoEnArticulo(el), (i + 1) * 50);
+      });
+    }
   };
 
   const aplicarEnlace = (sentence) => {
@@ -1911,8 +1994,8 @@ export default function Home() {
                     <span style={{ fontSize: "1rem" }}>✦</span>
                     <span style={{ color: "#E9D5FF", fontWeight: 700, fontSize: "0.88rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.06em" }}>Resultados de los agentes</span>
                   </div>
-                  <div style={{ display: "flex", gap: "0.3rem" }}>
-                    {[["links","🔗 Links"], ["headlines","📝 Títulos"], ["keywords","📊 Keywords"]].map(([key, label]) => (
+                  <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                    {[["links","🔗 Links"], ["headlines","📝 Títulos"], ["keywords","📊 Keywords"], ["cro","💰 CRO"], ["landing","🚀 Landing"]].map(([key, label]) => (
                       <button key={key} onClick={() => setEnhanceTab(key)}
                         style={{ padding: "0.3rem 0.7rem", borderRadius: 6, border: "none", background: enhanceTab === key ? "#7C3AED" : "rgba(255,255,255,0.08)", color: enhanceTab === key ? "#FFF" : "#A78BFA", fontSize: "0.75rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase" }}>
                         {label}
@@ -2052,10 +2135,118 @@ export default function Home() {
                     </div>
                   )}
 
+                  {/* ── CRO TAB ── */}
+                  {enhanceTab === "cro" && enhanceResult.cro && !enhanceResult.cro.error && (() => {
+                    const { score, strategy_summary, elements = [] } = enhanceResult.cro;
+                    const typeColors = { cta: "#10B981", objection: "#F59E0B", social_proof: "#3B82F6", trust: "#8B5CF6", authority: "#EC4899" };
+                    const typeLabels = { cta: "CTA", objection: "Objeción", social_proof: "Prueba social", trust: "Confianza", authority: "Autoridad" };
+                    return (
+                      <div>
+                        {/* Score + summary */}
+                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                          <div style={{ width: 54, height: 54, borderRadius: "50%", border: `3px solid ${score >= 80 ? C.green : score >= 60 ? C.orange : C.red}`, background: `${score >= 80 ? C.green : score >= 60 ? C.orange : C.red}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: "1.1rem", fontWeight: 800, color: score >= 80 ? C.green : score >= 60 ? C.orange : C.red, fontFamily: "'Oswald', sans-serif" }}>{score}</span>
+                          </div>
+                          {strategy_summary && <p style={{ fontSize: "0.82rem", color: C.muted, margin: 0, lineHeight: 1.4, fontStyle: "italic" }}>{strategy_summary}</p>}
+                        </div>
+                        {/* Elements list */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                          {elements.map((el) => {
+                            const isSelected = croSelected.has(el.id);
+                            const tagColor = typeColors[el.type] || C.muted;
+                            return (
+                              <div key={el.id} onClick={() => {
+                                const next = new Set(croSelected);
+                                isSelected ? next.delete(el.id) : next.add(el.id);
+                                setCroSelected(next);
+                              }} style={{ background: isSelected ? `${tagColor}12` : C.light, border: `1.5px solid ${isSelected ? tagColor : C.border}`, borderRadius: 10, padding: "0.65rem 0.85rem", cursor: "pointer", transition: "all 0.15s" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
+                                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSelected ? tagColor : C.border}`, background: isSelected ? tagColor : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    {isSelected && <span style={{ color: "#FFF", fontSize: "0.6rem", fontWeight: 900 }}>✓</span>}
+                                  </div>
+                                  <span style={{ fontSize: "0.7rem", fontWeight: 700, color: tagColor, background: `${tagColor}15`, padding: "0.1rem 0.45rem", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.03em" }}>{typeLabels[el.type] || el.type}</span>
+                                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: C.dark }}>{el.label}</span>
+                                  {el.placement && <span style={{ fontSize: "0.7rem", color: C.muted, marginLeft: "auto" }}>→ {el.placement.replace(/^H2:\s*/i, "")}</span>}
+                                </div>
+                                {el.reason && <p style={{ fontSize: "0.75rem", color: C.muted, margin: "0 0 0.3rem 1.6rem", lineHeight: 1.35, fontStyle: "italic" }}>{el.reason}</p>}
+                                <div style={{ marginLeft: "1.6rem", fontSize: "0.78rem", color: C.mid, background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0.4rem 0.6rem", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 60, overflow: "hidden", position: "relative" }}>
+                                  {el.text?.slice(0, 120)}{el.text?.length > 120 ? "…" : ""}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Apply button */}
+                        {croSelected.size > 0 && (
+                          <button onClick={() => { aplicarSeleccionados(elements, croSelected); setCroSelected(new Set()); }}
+                            style={{ width: "100%", padding: "0.6rem", background: "linear-gradient(135deg,#10B981,#059669)", color: "#FFF", border: "none", borderRadius: 8, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                            ✦ Aplicar {croSelected.size} elemento{croSelected.size > 1 ? "s" : ""} al artículo
+                          </button>
+                        )}
+                        {elements.length === 0 && <p style={{ color: C.muted, fontSize: "0.82rem", fontStyle: "italic" }}>No se generaron elementos de conversión.</p>}
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── LANDING TAB ── */}
+                  {enhanceTab === "landing" && enhanceResult.landing && !enhanceResult.landing.error && (() => {
+                    const { score, summary, elements = [] } = enhanceResult.landing;
+                    const typeColors = { cta: "#10B981", trust_signal: "#8B5CF6", intro_hook: "#3B82F6", closing: "#F59E0B", friction_fix: "#EF4444" };
+                    const typeLabels = { cta: "CTA", trust_signal: "Confianza", intro_hook: "Gancho", closing: "Cierre", friction_fix: "Fricción" };
+                    return (
+                      <div>
+                        {/* Score + summary */}
+                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+                          <div style={{ width: 54, height: 54, borderRadius: "50%", border: `3px solid ${score >= 80 ? C.green : score >= 60 ? C.orange : C.red}`, background: `${score >= 80 ? C.green : score >= 60 ? C.orange : C.red}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: "1.1rem", fontWeight: 800, color: score >= 80 ? C.green : score >= 60 ? C.orange : C.red, fontFamily: "'Oswald', sans-serif" }}>{score}</span>
+                          </div>
+                          {summary && <p style={{ fontSize: "0.82rem", color: C.muted, margin: 0, lineHeight: 1.4, fontStyle: "italic" }}>{summary}</p>}
+                        </div>
+                        {/* Elements list */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                          {elements.map((el) => {
+                            const isSelected = landingSelected.has(el.id);
+                            const tagColor = typeColors[el.type] || C.muted;
+                            return (
+                              <div key={el.id} onClick={() => {
+                                const next = new Set(landingSelected);
+                                isSelected ? next.delete(el.id) : next.add(el.id);
+                                setLandingSelected(next);
+                              }} style={{ background: isSelected ? `${tagColor}12` : C.light, border: `1.5px solid ${isSelected ? tagColor : C.border}`, borderRadius: 10, padding: "0.65rem 0.85rem", cursor: "pointer", transition: "all 0.15s" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
+                                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${isSelected ? tagColor : C.border}`, background: isSelected ? tagColor : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    {isSelected && <span style={{ color: "#FFF", fontSize: "0.6rem", fontWeight: 900 }}>✓</span>}
+                                  </div>
+                                  <span style={{ fontSize: "0.7rem", fontWeight: 700, color: tagColor, background: `${tagColor}15`, padding: "0.1rem 0.45rem", borderRadius: 5, textTransform: "uppercase", letterSpacing: "0.03em" }}>{typeLabels[el.type] || el.type}</span>
+                                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: C.dark }}>{el.label}</span>
+                                  {el.placement && <span style={{ fontSize: "0.7rem", color: C.muted, marginLeft: "auto" }}>→ {el.placement.replace(/^H2:\s*/i, "")}</span>}
+                                </div>
+                                {el.reason && <p style={{ fontSize: "0.75rem", color: C.muted, margin: "0 0 0.3rem 1.6rem", lineHeight: 1.35, fontStyle: "italic" }}>{el.reason}</p>}
+                                <div style={{ marginLeft: "1.6rem", fontSize: "0.78rem", color: C.mid, background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "0.4rem 0.6rem", fontFamily: "monospace", lineHeight: 1.45, maxHeight: 60, overflow: "hidden" }}>
+                                  {el.text?.slice(0, 120)}{el.text?.length > 120 ? "…" : ""}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {/* Apply button */}
+                        {landingSelected.size > 0 && (
+                          <button onClick={() => { aplicarSeleccionados(elements, landingSelected); setLandingSelected(new Set()); }}
+                            style={{ width: "100%", padding: "0.6rem", background: "linear-gradient(135deg,#F59E0B,#D97706)", color: "#FFF", border: "none", borderRadius: 8, fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                            ✦ Aplicar {landingSelected.size} elemento{landingSelected.size > 1 ? "s" : ""} al artículo
+                          </button>
+                        )}
+                        {elements.length === 0 && <p style={{ color: C.muted, fontSize: "0.82rem", fontStyle: "italic" }}>No se generaron mejoras de landing.</p>}
+                      </div>
+                    );
+                  })()}
+
                   {/* Error states */}
                   {enhanceTab === "links" && enhanceResult.linker?.error && <div style={{ color: C.red, fontSize: "0.82rem", padding: "0.5rem" }}>⚠ Error en el agente de enlaces: {enhanceResult.linker.error}</div>}
                   {enhanceTab === "headlines" && enhanceResult.headlines?.error && <div style={{ color: C.red, fontSize: "0.82rem", padding: "0.5rem" }}>⚠ Error en el generador de titulares: {enhanceResult.headlines.error}</div>}
                   {enhanceTab === "keywords" && enhanceResult.keywords?.error && <div style={{ color: C.red, fontSize: "0.82rem", padding: "0.5rem" }}>⚠ Error en el mapeador de keywords: {enhanceResult.keywords.error}</div>}
+                  {enhanceTab === "cro" && enhanceResult.cro?.error && <div style={{ color: C.red, fontSize: "0.82rem", padding: "0.5rem" }}>⚠ Error en el agente CRO: {enhanceResult.cro.error}</div>}
+                  {enhanceTab === "landing" && enhanceResult.landing?.error && <div style={{ color: C.red, fontSize: "0.82rem", padding: "0.5rem" }}>⚠ Error en el agente Landing: {enhanceResult.landing.error}</div>}
                 </div>
               </div>
             )}
