@@ -442,7 +442,7 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
       </div>
 
       {/* ── Body ── */}
-      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
+      <div style={{ padding: "0.85rem 1rem" }}>
 
         {/* ── Dropdown selector ── */}
         <div style={{ position: "relative", marginBottom: "0.85rem" }}>
@@ -568,7 +568,7 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
         <span style={{ color: "#AAA", fontSize: "0.85rem", transition: "transform 0.2s", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
       </button>
       {expanded && (
-        <div style={{ padding: "1rem 1.25rem", maxHeight: "300px", overflowY: "auto" }}>
+        <div style={{ padding: "1rem 1.25rem" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
             {articles.map((a, i) => (
               <div key={a.id || i} style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.7rem 0.85rem" }}>
@@ -998,6 +998,10 @@ export default function Home() {
   const [categoria, setCategoria] = useState("");
   const [keywords, setKeywords] = useState("");
   const [tono, setTono] = useState(TONOS[0]);
+  const [publico, setPublico] = useState("General");
+  const [longitud, setLongitud] = useState("Estándar");
+  const [intencion, setIntencion] = useState("Informativa");
+  const [urlProducto, setUrlProducto] = useState("");
   const [contexto, setContexto] = useState("");
   const [articulo, setArticulo] = useState("");
 
@@ -1108,7 +1112,7 @@ export default function Home() {
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        tema, categoria, keywords, tono, contexto,
+        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, urlProducto,
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
       const data = await res.json();
@@ -1257,7 +1261,7 @@ export default function Home() {
         ::-webkit-scrollbar-thumb { background: ${isDark ? "#333" : "#DDD"}; border-radius: 3px; }
         @media (max-width: 1200px) {
           .main-grid { grid-template-columns: 1fr !important; }
-          .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
+          .form-sticky, .gsc-sticky { top: 0 !important; }
         }
       `}</style>
 
@@ -1281,7 +1285,7 @@ export default function Home() {
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
-        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
+        <div className="form-column form-sticky" style={{ alignSelf: "start" }}>
           <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
             <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1313,6 +1317,10 @@ export default function Home() {
               <div><label style={labelStyle}>Categoría *</label><select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}><option value="">Selecciona categoría...</option>{CATEGORIAS.map(g => <optgroup key={g.group} label={g.group}>{g.items.map(item => <option key={item} value={item}>{item}</option>)}</optgroup>)}</select></div>
               <div><label style={labelStyle}>Keywords SEO <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Ej: suelo porcelánico, exterior" style={inputStyle} /></div>
               <div><label style={labelStyle}>Tono</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{TONOS.map(t => <button key={t} onClick={() => setTono(t)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: tono === t ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: tono === t ? C.redLight : C.cardBg, color: tono === t ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: tono === t ? 700 : 500 }}>{t}</button>)}</div></div>
+              <div><label style={labelStyle}>Público objetivo</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{[["General", ""], ["Particulares / DIY", ""], ["Profesionales", ""], ["Arquitectos", ""]].map(([p]) => (<button key={p} onClick={() => setPublico(p)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: publico === p ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: publico === p ? C.redLight : C.cardBg, color: publico === p ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: publico === p ? 700 : 500 }}>{p}</button>))}</div></div>
+              <div><label style={labelStyle}>Longitud objetivo</label><div style={{ display: "flex", gap: "0.35rem" }}>{[["Corto", "~600 pal"], ["Estándar", "~900 pal"], ["Largo", "~1200 pal"]].map(([l, hint]) => (<button key={l} onClick={() => setLongitud(l)} style={{ flex: 1, padding: "0.4rem 0.5rem", borderRadius: 8, border: longitud === l ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: longitud === l ? C.redLight : C.cardBg, color: longitud === l ? C.red : C.mid, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: longitud === l ? 700 : 500, textAlign: "center", lineHeight: 1.25 }}><div style={{ fontWeight: 700 }}>{l}</div><div style={{ fontSize: "0.62rem", opacity: 0.65 }}>{hint}</div></button>))}</div></div>
+              <div><label style={labelStyle}>Intención de búsqueda</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{["Informativa", "Comparativa", "Transaccional", "Guía técnica"].map(it => (<button key={it} onClick={() => setIntencion(it)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: intencion === it ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: intencion === it ? C.redLight : C.cardBg, color: intencion === it ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: intencion === it ? 700 : 500 }}>{it}</button>))}</div></div>
+              <div><label style={labelStyle}>URL de producto <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={urlProducto} onChange={e => setUrlProducto(e.target.value)} placeholder="https://ferrolan.es/producto/..." style={inputStyle} /></div>
               <div>
                 <label style={labelStyle}>Contexto / Idea concreta <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(recomendado)</span></label>
                 <textarea value={contexto} onChange={e => setContexto(e.target.value)} placeholder="Describe qué quieres que cubra el artículo: enfoque, puntos clave, productos relevantes, público objetivo, datos específicos..." rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
@@ -1445,7 +1453,7 @@ export default function Home() {
                   {scheduledArticles.filter(a => a.status === "scheduled").length}
                 </span>
               </div>
-              <div style={{ padding: "0.85rem 1.1rem", maxHeight: "250px", overflowY: "auto" }}>
+              <div style={{ padding: "0.85rem 1.1rem" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                   {scheduledArticles.map((a, i) => {
                     const isPast = new Date(a.publishDate) < new Date();
@@ -1591,7 +1599,7 @@ export default function Home() {
         </div>
 
         {/* ─── RIGHT: SEO + OPPORTUNITIES PANELS ─── */}
-        <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
+        <div className="gsc-sticky" style={{ alignSelf: "start" }}>
           {articulo && <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />}
           <OpportunitiesPanel
             gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
