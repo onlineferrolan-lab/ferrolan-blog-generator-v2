@@ -54,14 +54,18 @@ ${articulo}`;
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 1536,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const raw = msg.content[0]?.text || "{}";
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error("Respuesta del agente de enlaces no es JSON válido");
+  }
 }
 
 // Agent 2: Headline Generator
@@ -103,14 +107,18 @@ ${articulo.slice(0, 2000)}`;
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 1536,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const raw = msg.content[0]?.text || "{}";
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error("Respuesta del agente de titulares no es JSON válido");
+  }
 }
 
 // Agent 3: Keyword Mapper
@@ -159,18 +167,29 @@ Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
 **Keywords objetivo:** ${keywords || "Extraer del artículo"}
 
 **Artículo completo:**
-${articulo}`;
+${articulo.slice(0, 4000)}`;
 
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
 
   const raw = msg.content[0]?.text || "{}";
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-  return JSON.parse(cleaned);
+
+  // Guard against truncated JSON: try to parse, fix if unterminated
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Attempt to close any open structures so we get partial data
+    const attempts = [cleaned + '"}]}', cleaned + '"]}', cleaned + '"}', cleaned + '}'];
+    for (const attempt of attempts) {
+      try { return JSON.parse(attempt); } catch { /* continue */ }
+    }
+    throw new Error("Respuesta del agente keywords no es JSON válido");
+  }
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
