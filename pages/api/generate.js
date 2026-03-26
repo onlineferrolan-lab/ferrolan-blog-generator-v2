@@ -77,6 +77,18 @@ ESTRUCTURA DEL ARTÍCULO:
 - Cuerpo: 3-5 secciones con H2, cada una con 1-2 párrafos. Pueden incluir subsecciones con H3 y listas cuando sea útil (máx. 5 ítems).
 - Cierre: 1 párrafo final que, de forma natural y sin presión, menciona que en las tiendas de Ferrolan (Barcelona, Rubí, Badalona o Santa Coloma de Gramenet) se puede ver el material en persona o recibir asesoramiento técnico. Tono: servicio, no venta.
 
+ADAPTACIÓN POR PÚBLICO OBJETIVO:
+- "General": Escribe para cualquiera, nivel principiante, sin asumir conocimiento previo.
+- "Particulares / DIY": Enfoque práctico paso a paso, "hazlo tú mismo", consejos de aplicación doméstica.
+- "Profesionales": Tono técnico, detalles específicos, normativas, durabilidad, mantenimiento profesional.
+- "Arquitectos / Diseñadores": Énfasis en estética, tendencias, combinaciones, posibilidades creativas, inspiración.
+
+ADAPTACIÓN POR INTENCIÓN DE BÚSQUEDA:
+- "Informativa": Artículo educativo que responde preguntas, resuelve dudas, enseña conceptos. Estructura: intro, desarrollo profundo, conclusión.
+- "Comparativa": Contrasta opciones, materiales o soluciones. Usa tablas comparativas, pros/contras. Ayuda al lector a elegir.
+- "Transaccional": El lector busca comprar o actuar. Incluye guía de selección, cuándo comprar, dónde encontrarlo (Ferrolan). CTA claro pero natural.
+- "Guía técnica": Paso a paso detallado. Numera los pasos, proporciona medidas/cantidades, herramientas necesarias, trucos prácticos.
+
 META SEO:
 Al final del artículo (después de una línea ---), añade un bloque con:
 - Meta título (máx 60 caracteres)
@@ -115,7 +127,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, contexto, researchData } = req.body;
+  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlProducto } = req.body;
 
   if (!tema || !categoria) {
     return res.status(400).json({ error: "Tema y categoría son obligatorios" });
@@ -135,9 +147,13 @@ export default async function handler(req, res) {
 
 **Tema:** ${tema}
 **Categoría:** ${categoria}
+**Público objetivo:** ${publico || "General"}
+**Intención de búsqueda:** ${intencion || "Informativa"}
+**Longitud:** ${longitud ? (longitud === "Corto" ? "~600 palabras" : longitud === "Estándar" ? "~900 palabras" : "~1200 palabras") : "~900 palabras"}
 **Tono:** ${tono || "Informativo / Educativo"}
 **Keywords SEO a incluir:** ${keywords || "los que consideres más relevantes para el tema"}
 ${contexto ? `**Contexto e idea concreta del artículo:** ${contexto}` : ""}
+${urlProducto ? `**URL de producto a referenciar:** ${urlProducto}` : ""}
 ${researchData ? `
 **INVESTIGACIÓN PREVIA DEL TEMA:**
 - Secciones que cubren los competidores: ${researchData.competitorInsights?.commonSections?.join(", ") || "No disponible"}
