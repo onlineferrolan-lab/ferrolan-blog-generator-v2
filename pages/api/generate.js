@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
+import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
 
 // ─── Helpers KV ─────────────────────────────────────────────────────────────
 
@@ -44,38 +45,19 @@ async function getArticleHistory() {
   }
 }
 
-// ─── System Prompt base ──────────────────────────────────────────────────────
+// ─── System Prompt ────────────────────────────────────────────────────────────
+// Construido dinámicamente inyectando los archivos de contexto reales de /context/
 
-const BASE_SYSTEM_PROMPT = `Eres el redactor especializado del blog de Ferrolan, una empresa distribuidora de materiales de construcción, cerámica, baño, cocina, parquet, ferretería y jardinería con tiendas en Barcelona, Rubí, Badalona y Santa Coloma de Gramenet.
+const ROLE_INTRO = `Eres el redactor especializado del blog de Ferrolan, una empresa distribuidora de materiales de construcción, cerámica, baño, cocina, parquet, ferretería y jardinería con tiendas en Barcelona, Rubí, Badalona y Santa Coloma de Gramenet.
 
-FILOSOFÍA EDITORIAL — MUY IMPORTANTE:
-El blog de Ferrolan es ante todo un recurso de información útil para el lector, no un catálogo de ventas. Los artículos deben aportar valor real: resolver dudas, enseñar, inspirar o guiar al lector en su proyecto. Ferrolan aparece de forma natural como referencia experta, nunca como el protagonista que intenta vender.
+Tu trabajo es escribir artículos de blog que sigan fielmente la voz de marca, las reglas SEO y las convenciones editoriales de Ferrolan que se definen en los documentos de referencia adjuntos. Léelos con atención — son tu guía obligatoria.`;
 
-REGLAS DE TONO — LEE CON ATENCIÓN:
-- PROHIBIDO usar frases comerciales como: "no esperes más", "consíguelo ahora", "el mejor precio", "oferta", "cómpralo", "descubre nuestra gama de productos", "tenemos todo lo que necesitas", etc.
-- PROHIBIDO presentar a Ferrolan como el foco del artículo. Ferrolan es el contexto, no el mensaje.
-- El artículo debe sonar como si lo hubiera escrito un experto del sector que comparte conocimiento, no un comercial que quiere vender.
-- Las menciones a Ferrolan deben sentirse como una recomendación honesta al final de un artículo útil, no como el objetivo del texto.
-- Los enlaces internos deben integrarse de forma natural dentro del contenido, como referencias a más información, nunca como botones de compra.
-- El CTA final debe invitar a explorar, consultar o visitar — nunca a comprar.
-
-ESTILO EDITORIAL:
-- Tono: experto, cercano y didáctico. Como un profesional que explica algo a un amigo.
-- Estructura: H1 (título), introducción de 2-3 párrafos, secciones con H2/H3, cierre con mención natural a Ferrolan
-- Longitud: entre 700 y 1.100 palabras
-- Voz: primera persona del plural ocasional ("en este artículo veremos...", "conviene tener en cuenta...")
-- Usa negritas con moderación para destacar conceptos clave usando **texto**
-- Incluye 2-3 enlaces internos naturales con el formato [texto descriptivo](/ruta) apuntando a secciones de ferrolan.es (ej: /banos/lavabos, /azulejos, /cocinas, /construccion, /parquet, /jardineria).
+const SECTIONS_AND_STRUCTURE = `
 
 SECCIONES DEL BLOG:
 1. "Inspiración e ideas" → subcategorías: Baño, Cocinas, Cerámica y parquet, Espacios exteriores
 2. "Aprende con nosotros" → subcategorías: Consejos, Guía paso a paso, Soluciones constructivas
 3. "Noticias" → subcategorías: Nuevos productos, Sector, Eventos
-
-ESTRUCTURA DEL ARTÍCULO:
-- Introducción: contextualiza el tema desde la perspectiva del lector y su necesidad real, sin mencionar a Ferrolan
-- Cuerpo: 3-5 secciones con H2, cada una con 1-2 párrafos. Pueden incluir subsecciones con H3 y listas cuando sea útil (máx. 5 ítems).
-- Cierre: 1 párrafo final que, de forma natural y sin presión, menciona que en las tiendas de Ferrolan (Barcelona, Rubí, Badalona o Santa Coloma de Gramenet) se puede ver el material en persona o recibir asesoramiento técnico. Tono: servicio, no venta.
 
 ADAPTACIÓN POR PÚBLICO OBJETIVO:
 - "General": Escribe para cualquiera, nivel principiante, sin asumir conocimiento previo.
@@ -84,10 +66,10 @@ ADAPTACIÓN POR PÚBLICO OBJETIVO:
 - "Arquitectos / Diseñadores": Énfasis en estética, tendencias, combinaciones, posibilidades creativas, inspiración.
 
 ADAPTACIÓN POR INTENCIÓN DE BÚSQUEDA:
-- "Informativa": Artículo educativo que responde preguntas, resuelve dudas, enseña conceptos. Estructura: intro, desarrollo profundo, conclusión.
-- "Comparativa": Contrasta opciones, materiales o soluciones. Usa tablas comparativas, pros/contras. Ayuda al lector a elegir.
-- "Transaccional": El lector busca comprar o actuar. Incluye guía de selección, cuándo comprar, dónde encontrarlo (Ferrolan). CTA claro pero natural.
-- "Guía técnica": Paso a paso detallado. Numera los pasos, proporciona medidas/cantidades, herramientas necesarias, trucos prácticos.
+- "Informativa": Artículo educativo que responde preguntas, resuelve dudas, enseña conceptos.
+- "Comparativa": Contrasta opciones, materiales o soluciones. Usa tablas comparativas, pros/contras.
+- "Transaccional": El lector busca comprar o actuar. Incluye guía de selección y dónde encontrarlo. CTA natural.
+- "Guía técnica": Paso a paso detallado. Numera los pasos, proporciona medidas/cantidades, trucos prácticos.
 
 META SEO:
 Al final del artículo (después de una línea ---), añade un bloque con:
@@ -96,28 +78,40 @@ Al final del artículo (después de una línea ---), añade un bloque con:
 - Slug URL sugerido
 - Etiquetas sugeridas (3-5)
 
-IMPORTANTE: Responde ÚNICAMENTE con el artículo en formato Markdown. Sin explicaciones previas ni comentarios fuera del artículo.`;
+IMPORTANTE: Responde ÚNICAMENTE con el artículo en formato Markdown. Sin explicaciones previas ni comentarios.`;
 
-// Construye el system prompt completo inyectando el historial si existe
-function buildSystemPrompt(history) {
-  if (!history || history.length === 0) return BASE_SYSTEM_PROMPT;
+// Construye el system prompt completo:
+// 1. Rol + intro
+// 2. Documentos de contexto reales (brand-voice, seo, links, style)
+// 3. Estructura y adaptaciones
+// 4. Historial de artículos publicados (anti-duplicados)
+function buildSystemPrompt(history, contextBlock) {
+  const parts = [ROLE_INTRO];
 
-  const historialTexto = history
-    .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
-    .join("\n");
+  if (contextBlock) {
+    parts.push(`\n\n# DOCUMENTOS DE REFERENCIA OBLIGATORIA\n\n${contextBlock}`);
+  }
 
-  return `${BASE_SYSTEM_PROMPT}
+  parts.push(SECTIONS_AND_STRUCTURE);
 
-HISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
-A continuación se listan todos los artículos que ya existen en el blog de Ferrolan. Debes tenerlos en cuenta para:
-1. NO repetir temas ya cubiertos. Si el tema solicitado es igual o muy similar a uno existente, abórdalo desde un ángulo diferente, más específico o complementario.
+  if (history && history.length > 0) {
+    const historialTexto = history
+      .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
+      .join("\n");
+
+    parts.push(`\n\nHISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
+A continuación se listan todos los artículos que ya existen en el blog. Debes tenerlos en cuenta para:
+1. NO repetir temas ya cubiertos — aborda el tema desde un ángulo diferente o más específico.
 2. NO repetir el mismo enfoque o estructura que artículos previos de la misma categoría.
-3. Puedes hacer referencias internas a artículos existentes cuando sea relevante, usando el slug como ruta del enlace.
+3. Puedes hacer referencias internas a artículos existentes usando el slug como ruta del enlace.
 
 ARTÍCULOS EXISTENTES (${history.length} en total):
 ${historialTexto}
 
-Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`;
+Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`);
+  }
+
+  return parts.join("");
 }
 
 // ─── Handler principal ───────────────────────────────────────────────────────
@@ -140,8 +134,10 @@ export default async function handler(req, res) {
   // 1. Recuperar historial de KV (no bloquea si falla)
   const history = await getArticleHistory();
 
-  // 2. Construir system prompt con historial inyectado
-  const systemPrompt = buildSystemPrompt(history);
+  // 2. Cargar contexto de marca desde /context/ e inyectarlo en el system prompt
+  const contextFiles = loadGenerationContext();
+  const contextBlock = buildContextBlock(contextFiles);
+  const systemPrompt = buildSystemPrompt(history, contextBlock);
 
   const userPrompt = `Escribe un artículo de blog para Ferrolan con las siguientes características:
 
