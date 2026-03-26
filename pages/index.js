@@ -1221,6 +1221,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("preview");
+  const [view, setView] = useState("panels"); // "panels" | "article"
   const [imagenes, setImagenes] = useState([]);
   const [loadingImages, setLoadingImages] = useState(false);
   const [draggedImg, setDraggedImg] = useState(null);
@@ -1338,7 +1339,7 @@ export default function Home() {
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
       const data = await res.json();
-      if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); }
+      if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); setView("article"); }
       else setError(data.error || "Error al generar el artículo.");
     } catch { setError("Error de conexión. Inténtalo de nuevo."); }
     setLoading(false);
@@ -1485,6 +1486,8 @@ export default function Home() {
           .main-grid { grid-template-columns: 1fr !important; }
           .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
         }
+        @keyframes slideIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
+        .article-view { animation: slideIn 0.3s ease; }
       `}</style>
 
       <header style={{ background: C.cardBg, borderBottom: `3px solid ${C.red}`, padding: "0 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, transition: "background 0.3s" }}>
@@ -1504,7 +1507,11 @@ export default function Home() {
         <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + OpenAI Images · GSC + Keywords Prestashop</p>
       </div>
 
-      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ═══  VIEW: PANELS (main dashboard)  ═══════════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {view === "panels" && (
+      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "420px 1fr", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
         <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
@@ -1703,126 +1710,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── CENTER: RESULT ─── */}
-        <div>
-          {!articulo && !loading && (
-            <div style={{ background: C.cardBg, border: `2px dashed ${C.border}`, borderRadius: 12, padding: "6rem 2.5rem", textAlign: "center", transition: "background 0.3s" }}>
-              <div style={{ width: 60, height: 60, background: C.redLight, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.5rem" }}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-              </div>
-              <div style={{ color: C.dark, fontWeight: 700, fontSize: "1.1rem", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.5rem" }}>Genera tu artículo</div>
-              <div style={{ color: C.muted, fontSize: "0.95rem", maxWidth: 420, margin: "0 auto", lineHeight: 1.6 }}>Rellena el formulario o selecciona una oportunidad del panel GSC para empezar</div>
-            </div>
-          )}
-
-          {loading && (
-            <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "6rem 2.5rem", textAlign: "center", transition: "background 0.3s" }}>
-              <div style={{ width: 48, height: 48, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1.5rem" }} />
-              <div style={{ color: C.dark, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", fontSize: "1.05rem", marginBottom: "0.5rem" }}>Generando artículo...</div>
-              <div style={{ color: C.muted, fontSize: "0.95rem" }}>Claude está redactando en el estilo de Ferrolan</div>
-            </div>
-          )}
-
-          {articulo && (
-            <div className="articulo-panel">
-              <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
-                <div style={{ background: C.panelHeader, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", gap: "0.2rem" }}>
-                    {[["preview", "Vista previa"], ["editor", "✎ Editar"], ["html", "HTML"]].map(([val, label]) => (
-                      <button key={val} onClick={() => setActiveTab(val)} style={{ padding: "0.4rem 1rem", borderRadius: 6, border: "none", background: activeTab === val ? (val === "editor" ? "#7C3AED" : C.red) : "transparent", color: activeTab === val ? "#FFF" : "#AAA", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</button>
-                    ))}
-                  </div>
-                  <button onClick={copiarContenido} style={{ background: copied ? "#059669" : "rgba(255,255,255,0.1)", color: "#FFF", border: "none", borderRadius: 6, padding: "0.45rem 1rem", fontSize: "0.85rem", cursor: "pointer", fontWeight: 600 }}>{copied ? "✓ Copiado" : activeTab === "html" ? "⎘ Copiar HTML" : "⎘ Copiar MD"}</button>
-                </div>
-                {activeTab === "editor" ? (
-                  <MarkdownEditor value={articulo} onChange={setArticulo} C={C} />
-                ) : (
-                <div style={{ padding: "2.5rem 3rem", maxHeight: "70vh", overflowY: "auto" }}>
-                  {activeTab === "preview"
-                    ? <DroppableArticle articulo={articulo} imagenes={imagenes} onInsertImage={insertImageAtBlock} C={C} />
-                    : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.88rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articuloHtml}</pre>}
-                </div>
-                )}
-
-                {/* Bottom bar with Regenerar + Guardar + Programar + Borrador WP */}
-                <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", background: C.light }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <button onClick={generarArticulo}
-                      style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
-                      onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
-                      onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>↺ Regenerar</button>
-
-                    <button onClick={publicarArticulo} disabled={saving || saveSuccess}
-                      style={{ background: saveSuccess ? "#059669" : "#059669", color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: saving ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
-                      onMouseOver={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#047857")}
-                      onMouseOut={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#059669")}>
-                      {saveSuccess ? <span className="save-check">✓ Guardado</span> : saving ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Guardando...</> : <>✦ Guardar</>}
-                    </button>
-
-                    <button onClick={() => setShowScheduler(!showScheduler)}
-                      disabled={scheduleSuccess}
-                      style={{ background: scheduleSuccess ? "#2563EB" : showScheduler ? C.blue : C.cardBg, color: scheduleSuccess ? "#FFF" : showScheduler ? "#FFF" : C.blue, border: `1px solid ${scheduleSuccess || showScheduler ? "transparent" : C.blue}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
-                    </button>
-
-                    <button onClick={publicarEnWP} disabled={publishing || !!publishResult}
-                      style={{ background: publishResult ? "#DC2626" : publishing ? "#991B1B" : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: publishing ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
-                      onMouseOver={e => !publishing && !publishResult && (e.currentTarget.style.background = C.redDark)}
-                      onMouseOut={e => !publishing && !publishResult && (e.currentTarget.style.background = C.red)}>
-                      {publishResult ? <span className="save-check">✓ Borrador en WP</span> : publishing ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Subiendo...</> : <>📝 Borrador WP</>}
-                    </button>
-
-                    <span style={{ flex: 1 }} />
-                    <span style={{ fontSize: "0.82rem", color: C.muted }}>
-                      {publishResult ? <a href={publishResult.wpEditLink || publishResult.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Editar borrador en WP →</a> : scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
-                    </span>
-                  </div>
-
-                  {/* Scheduler panel — Google Sheets */}
-                  {showScheduler && (
-                    <div style={{ background: C.cardBg, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "1rem 1.25rem", animation: "fadeIn 0.2s ease" }}>
-                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                        📅 Programar publicación
-                      </div>
-
-                      {nextSlot ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-                          <div style={{ background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.85rem 1.25rem", flex: 1 }}>
-                            <div style={{ fontSize: "0.72rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Próximo slot disponible</div>
-                            <div style={{ fontSize: "1.15rem", fontWeight: 700, color: C.blue, fontFamily: "'Oswald', sans-serif" }}>
-                              {nextSlot.dayName} {nextSlot.nextDate}
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: C.muted, marginTop: "0.15rem" }}>
-                              Fila {nextSlot.nextRow} del Google Sheet
-                            </div>
-                          </div>
-
-                          <button onClick={programarArticulo} disabled={scheduling}
-                            style={{ background: scheduling ? "#1D4ED8" : C.blue, color: "#FFF", border: "none", borderRadius: 10, padding: "0.85rem 1.8rem", fontSize: "0.9rem", cursor: scheduling ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}>
-                            {scheduling ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Programando...</> : "Confirmar"}
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: "0.88rem", color: C.muted }}>Cargando próximo slot disponible...</div>
-                      )}
-
-                      <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.65rem", lineHeight: 1.4 }}>
-                        Se publicará cada martes y jueves. Se añadirá automáticamente al Google Sheet del departamento.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {imageError && <div style={{ marginTop: "0.85rem", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.65rem 1.1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {imageError}</div>}
-              <ImagePalette imagenes={imagenes} loadingImages={loadingImages} onGenerate={generarImagenes} hasArticle={!!articulo} onDragStart={setDraggedImg} C={C} />
-            </div>
-          )}
-        </div>
-
-        {/* ─── RIGHT: SEO + OPPORTUNITIES PANELS ─── */}
+        {/* ─── RIGHT: OPPORTUNITIES + EVERGREEN + SAVED ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
-          {articulo && <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />}
           <OpportunitiesPanel
             gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
             kwData={kwData} kwLoading={kwLoading} onRefreshKW={() => fetchKeywords(true)}
@@ -1833,7 +1722,146 @@ export default function Home() {
             onSelectTopic={handleSelectTopic} C={C}
           />
         </div>
+
+        {/* Loading overlay inside panels view */}
+        {loading && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+            <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 16, padding: "3rem 4rem", textAlign: "center" }}>
+              <div style={{ width: 48, height: 48, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 1.5rem" }} />
+              <div style={{ color: C.dark, fontWeight: 700, fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", fontSize: "1.05rem", marginBottom: "0.5rem" }}>Generando artículo...</div>
+              <div style={{ color: C.muted, fontSize: "0.95rem" }}>Claude está redactando en el estilo de Ferrolan</div>
+            </div>
+          </div>
+        )}
       </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ═══  VIEW: ARTICLE (full-screen editor)  ═════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {view === "article" && articulo && (
+      <div className="article-view" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem" }}>
+
+        {/* ── Back bar + article summary ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+          <button onClick={() => setView("panels")}
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.5rem 1rem", fontSize: "0.85rem", cursor: "pointer", color: C.mid, fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+            onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+            onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>
+            ← Volver a paneles
+          </button>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{tema}</span>
+            {categoria && <span style={{ fontSize: "0.72rem", fontWeight: 700, color: C.red, background: `${C.red}12`, padding: "0.15rem 0.5rem", borderRadius: 5 }}>{categoria}</span>}
+            {tono && <span style={{ fontSize: "0.72rem", fontWeight: 600, color: C.muted, background: C.light, padding: "0.15rem 0.5rem", borderRadius: 5, border: `1px solid ${C.border}` }}>{tono}</span>}
+          </div>
+        </div>
+
+        {/* ── Main article grid: Article + Sidebar ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: "1.5rem" }}>
+
+          {/* ── Article panel ── */}
+          <div>
+            <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
+              <div style={{ background: C.panelHeader, padding: "0.75rem 1.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", gap: "0.2rem" }}>
+                  {[["preview", "Vista previa"], ["editor", "✎ Editar"], ["html", "HTML"]].map(([val, label]) => (
+                    <button key={val} onClick={() => setActiveTab(val)} style={{ padding: "0.4rem 1rem", borderRadius: 6, border: "none", background: activeTab === val ? (val === "editor" ? "#7C3AED" : C.red) : "transparent", color: activeTab === val ? "#FFF" : "#AAA", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</button>
+                  ))}
+                </div>
+                <button onClick={copiarContenido} style={{ background: copied ? "#059669" : "rgba(255,255,255,0.1)", color: "#FFF", border: "none", borderRadius: 6, padding: "0.45rem 1rem", fontSize: "0.85rem", cursor: "pointer", fontWeight: 600 }}>{copied ? "✓ Copiado" : activeTab === "html" ? "⎘ Copiar HTML" : "⎘ Copiar MD"}</button>
+              </div>
+              {activeTab === "editor" ? (
+                <MarkdownEditor value={articulo} onChange={setArticulo} C={C} />
+              ) : (
+              <div style={{ padding: "2.5rem 3rem", maxHeight: "70vh", overflowY: "auto" }}>
+                {activeTab === "preview"
+                  ? <DroppableArticle articulo={articulo} imagenes={imagenes} onInsertImage={insertImageAtBlock} C={C} />
+                  : <pre style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", fontSize: "0.88rem", lineHeight: 1.75, color: C.mid, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{articuloHtml}</pre>}
+              </div>
+              )}
+
+              {/* Bottom bar with Regenerar + Guardar + Programar + Borrador WP */}
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: "0.85rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem", background: C.light }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                  <button onClick={generarArticulo}
+                    style={{ background: C.cardBg, color: C.mid, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+                    onMouseOver={e => { e.currentTarget.style.borderColor = C.red; e.currentTarget.style.color = C.red; }}
+                    onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.mid; }}>↺ Regenerar</button>
+
+                  <button onClick={publicarArticulo} disabled={saving || saveSuccess}
+                    style={{ background: saveSuccess ? "#059669" : "#059669", color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: saving ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                    onMouseOver={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#047857")}
+                    onMouseOut={e => !saving && !saveSuccess && (e.currentTarget.style.background = "#059669")}>
+                    {saveSuccess ? <span className="save-check">✓ Guardado</span> : saving ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Guardando...</> : <>✦ Guardar</>}
+                  </button>
+
+                  <button onClick={() => setShowScheduler(!showScheduler)}
+                    disabled={scheduleSuccess}
+                    style={{ background: scheduleSuccess ? "#2563EB" : showScheduler ? C.blue : C.cardBg, color: scheduleSuccess ? "#FFF" : showScheduler ? "#FFF" : C.blue, border: `1px solid ${scheduleSuccess || showScheduler ? "transparent" : C.blue}`, borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
+                  </button>
+
+                  <button onClick={publicarEnWP} disabled={publishing || !!publishResult}
+                    style={{ background: publishResult ? "#DC2626" : publishing ? "#991B1B" : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: publishing ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
+                    onMouseOver={e => !publishing && !publishResult && (e.currentTarget.style.background = C.redDark)}
+                    onMouseOut={e => !publishing && !publishResult && (e.currentTarget.style.background = C.red)}>
+                    {publishResult ? <span className="save-check">✓ Borrador en WP</span> : publishing ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Subiendo...</> : <>📝 Borrador WP</>}
+                  </button>
+
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: "0.82rem", color: C.muted }}>
+                    {publishResult ? <a href={publishResult.wpEditLink || publishResult.wpLink} target="_blank" rel="noopener noreferrer" style={{ color: C.red, fontWeight: 600, textDecoration: "none" }}>Editar borrador en WP →</a> : scheduleSuccess && scheduleResult ? `${scheduleResult.dayName} ${scheduleResult.publishDate} · Fila ${scheduleResult.sheetRow} ✓` : saveSuccess ? "Guardado en la base de datos ✓" : "Revisa antes de publicar"}
+                  </span>
+                </div>
+
+                {/* Scheduler panel — Google Sheets */}
+                {showScheduler && (
+                  <div style={{ background: C.cardBg, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "1rem 1.25rem", animation: "fadeIn 0.2s ease" }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, textTransform: "uppercase", letterSpacing: "0.05em", fontFamily: "'Oswald', sans-serif", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      📅 Programar publicación
+                    </div>
+
+                    {nextSlot ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                        <div style={{ background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: "0.85rem 1.25rem", flex: 1 }}>
+                          <div style={{ fontSize: "0.72rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", marginBottom: "0.25rem" }}>Próximo slot disponible</div>
+                          <div style={{ fontSize: "1.15rem", fontWeight: 700, color: C.blue, fontFamily: "'Oswald', sans-serif" }}>
+                            {nextSlot.dayName} {nextSlot.nextDate}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: C.muted, marginTop: "0.15rem" }}>
+                            Fila {nextSlot.nextRow} del Google Sheet
+                          </div>
+                        </div>
+
+                        <button onClick={programarArticulo} disabled={scheduling}
+                          style={{ background: scheduling ? "#1D4ED8" : C.blue, color: "#FFF", border: "none", borderRadius: 10, padding: "0.85rem 1.8rem", fontSize: "0.9rem", cursor: scheduling ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem", whiteSpace: "nowrap" }}>
+                          {scheduling ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" style={{ animation: "spin 0.85s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg> Programando...</> : "Confirmar"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "0.88rem", color: C.muted }}>Cargando próximo slot disponible...</div>
+                    )}
+
+                    <div style={{ fontSize: "0.78rem", color: C.muted, marginTop: "0.65rem", lineHeight: 1.4 }}>
+                      Se publicará cada martes y jueves. Se añadirá automáticamente al Google Sheet del departamento.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {imageError && <div style={{ marginTop: "0.85rem", background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.65rem 1.1rem", color: C.red, fontSize: "0.9rem", fontWeight: 600 }}>⚠ {imageError}</div>}
+            <ImagePalette imagenes={imagenes} loadingImages={loadingImages} onGenerate={generarImagenes} hasArticle={!!articulo} onDragStart={setDraggedImg} C={C} />
+          </div>
+
+          {/* ── Right sidebar: SEO ── */}
+          <div style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
+            <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />
+          </div>
+        </div>
+      </div>
+      )}
     </>
   );
 }
