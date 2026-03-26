@@ -19,16 +19,18 @@ export default async function handler(req, res) {
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
     // 2. Determinar qué es evergreen
-    // Heurística: artículos publicados hace más de 2 meses que tratan temas sin fecha (no noticias/eventos)
-    const doseMesesAtras = new Date();
-    doseMesesAtras.setMonth(doseMesesAtras.getMonth() - 2);
+    // Heurística: artículos que tratan temas sin fecha (no noticias/eventos)
+    // Si hay pocos artículos (<10), incluimos todos los no-noticia para que el panel sea útil
+    const umbralDias = articulos.length < 10 ? 0 : 7; // Sin mínimo si hay pocos artículos
+    const umbralFecha = new Date();
+    umbralFecha.setDate(umbralFecha.getDate() - umbralDias);
 
     const evergreen = articulos.filter((a) => {
       const fecha = new Date(a.fecha);
-      const tiempoAtras = doseMesesAtras > fecha;
-      // No incluir si parece una noticia (palabras clave: "nuevo", "evento", "2024", "2025", etc.)
-      const esNoticia = /nuevo|event|2024|2025|lanzamiento|próximo/i.test(a.titulo || "");
-      return tiempoAtras && !esNoticia;
+      const suficienteAntiguo = umbralFecha >= fecha;
+      // No incluir si parece una noticia (palabras clave de temporalidad)
+      const esNoticia = /nuevo[s]?\s+(producto|lanzamiento)|event|lanzamiento|próximo|feria|jornada/i.test(a.titulo || "");
+      return suficienteAntiguo && !esNoticia;
     });
 
     // 3. Identificar "pilares" = artículos evergreen más antiguos (más tiempo para acumular tráfico)

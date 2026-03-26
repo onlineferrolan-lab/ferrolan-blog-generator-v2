@@ -442,7 +442,7 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
       </div>
 
       {/* ── Body ── */}
-      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
+      <div style={{ padding: "0.85rem 1rem" }}>
 
         {/* ── Dropdown selector ── */}
         <div style={{ position: "relative", marginBottom: "0.85rem" }}>
@@ -637,7 +637,7 @@ function EvergreenPanel({ data, loading, onRefresh, onSelectTopic, C }) {
 
       {/* Body */}
       {expanded && (
-        <div style={{ padding: "0.85rem 1rem", maxHeight: "50vh", overflowY: "auto" }}>
+        <div style={{ padding: "0.85rem 1rem" }}>
 
           {/* Tab toggle: Pilares / Gaps */}
           <div style={{ display: "flex", gap: "0.3rem", marginBottom: "0.75rem" }}>
@@ -884,7 +884,7 @@ function SEOPanel({ articulo, tema, keywords, C }) {
         </div>
       </div>
 
-      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
+      <div style={{ padding: "0.85rem 1rem" }}>
         {/* ── SEO TAB ── */}
         {tab === "seo" && (
           <>
