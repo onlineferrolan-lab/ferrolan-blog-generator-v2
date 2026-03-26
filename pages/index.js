@@ -188,7 +188,7 @@ function ImagePalette({ imagenes, loadingImages, onGenerate, hasArticle, onDragS
         </div>
       </div>
 
-      <div style={{ padding: "1rem 1.25rem" }}>
+      <div style={{ padding: "1rem 1.25rem", maxHeight: "300px", overflowY: "auto" }}>
         {loadingImages && (
           <div style={{ textAlign: "center", padding: "1.5rem 1rem" }}>
             <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTopColor: C.red, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 0.75rem" }} />
@@ -442,7 +442,7 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
       </div>
 
       {/* ── Body ── */}
-      <div style={{ padding: "0.85rem 1rem" }}>
+      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
 
         {/* ── Dropdown selector ── */}
         <div style={{ position: "relative", marginBottom: "0.85rem" }}>
@@ -568,7 +568,7 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
         <span style={{ color: "#AAA", fontSize: "0.85rem", transition: "transform 0.2s", transform: expanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
       </button>
       {expanded && (
-        <div style={{ padding: "1rem 1.25rem" }}>
+        <div style={{ padding: "1rem 1.25rem", maxHeight: "300px", overflowY: "auto" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
             {articles.map((a, i) => (
               <div key={a.id || i} style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.7rem 0.85rem" }}>
@@ -678,7 +678,7 @@ function SEOPanel({ articulo, tema, keywords, C }) {
         </div>
       </div>
 
-      <div style={{ padding: "0.85rem 1rem" }}>
+      <div style={{ padding: "0.85rem 1rem", maxHeight: "55vh", overflowY: "auto" }}>
         {/* ── SEO TAB ── */}
         {tab === "seo" && (
           <>
@@ -1261,7 +1261,7 @@ export default function Home() {
         ::-webkit-scrollbar-thumb { background: ${isDark ? "#333" : "#DDD"}; border-radius: 3px; }
         @media (max-width: 1200px) {
           .main-grid { grid-template-columns: 1fr !important; }
-          .form-sticky, .gsc-sticky { top: 0 !important; }
+          .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
         }
       `}</style>
 
@@ -1285,7 +1285,7 @@ export default function Home() {
       <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 420px", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
-        <div className="form-column form-sticky" style={{ alignSelf: "start" }}>
+        <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
           <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden", transition: "background 0.3s" }}>
             <div style={{ background: C.panelHeader, padding: "0.75rem 1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.panelHeaderText} strokeWidth="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -1453,7 +1453,7 @@ export default function Home() {
                   {scheduledArticles.filter(a => a.status === "scheduled").length}
                 </span>
               </div>
-              <div style={{ padding: "0.85rem 1.1rem" }}>
+              <div style={{ padding: "0.85rem 1.1rem", maxHeight: "250px", overflowY: "auto" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                   {scheduledArticles.map((a, i) => {
                     const isPast = new Date(a.publishDate) < new Date();
@@ -1599,7 +1599,7 @@ export default function Home() {
         </div>
 
         {/* ─── RIGHT: SEO + OPPORTUNITIES PANELS ─── */}
-        <div className="gsc-sticky" style={{ alignSelf: "start" }}>
+        <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem" }}>
           {articulo && <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />}
           <OpportunitiesPanel
             gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
