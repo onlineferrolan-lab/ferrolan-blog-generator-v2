@@ -1551,7 +1551,7 @@ export default function Home() {
       {/* ═══  VIEW: PANELS (main dashboard)  ═══════════════════════════════════ */}
       {/* ═══════════════════════════════════════════════════════════════════════ */}
       {view === "panels" && (
-      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "420px 1fr", gap: "1.5rem" }}>
+      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "380px 1fr 1fr", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
         <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
@@ -1750,13 +1750,17 @@ export default function Home() {
           )}
         </div>
 
-        {/* ─── RIGHT: OPPORTUNITIES + EVERGREEN + SAVED ─── */}
+        {/* ─── CENTER: OPPORTUNITIES ─── */}
         <div className="gsc-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
           <OpportunitiesPanel
             gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
             kwData={kwData} kwLoading={kwLoading} onRefreshKW={() => fetchKeywords(true)}
             onSelectTopic={handleSelectTopic} C={C}
           />
+        </div>
+
+        {/* ─── RIGHT: EVERGREEN ─── */}
+        <div className="evergreen-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
           <EvergreenPanel
             data={evergreenData} loading={evergreenLoading} onRefresh={fetchEvergreen}
             onSelectTopic={handleSelectTopic} C={C}
