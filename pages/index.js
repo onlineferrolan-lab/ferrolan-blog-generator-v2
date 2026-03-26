@@ -374,10 +374,10 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.query}</span>
         <span style={{ fontSize: "0.78rem", fontWeight: 700, color: badgeColor, background: badgeBg, padding: "0.15rem 0.5rem", borderRadius: 6, whiteSpace: "nowrap" }}>{badge}</span>
       </div>
-      <div style={{ display: "flex", gap: "0.85rem", fontSize: "0.82rem", color: C.muted }}>
-        <span>{formatNum(item.impresiones)} impr</span>
-        {item.clics !== undefined && <span>{item.clics} clics</span>}
-        {item.ctr !== undefined && <span>CTR {item.ctr}%</span>}
+      <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#94A3B8", background: "rgba(148,163,184,0.12)", padding: "0.18rem 0.55rem", borderRadius: 20, border: "1px solid rgba(148,163,184,0.2)", letterSpacing: "0.02em" }}>{formatNum(item.impresiones)} impr</span>
+        {item.clics !== undefined && <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.green, background: `${C.green}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${C.green}30` }}>{item.clics} clics</span>}
+        {item.ctr !== undefined && <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.orange, background: `${C.orange}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${C.orange}30` }}>CTR {item.ctr}%</span>}
       </div>
       {extra && <div style={{ fontSize: "0.84rem", marginTop: "0.3rem", lineHeight: 1.4, ...extra.style }}>{extra.text}</div>}
     </button>
@@ -412,8 +412,7 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             {gscData && <span style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", borderRadius: 4, background: gscData.live ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.08)", color: gscData.live ? "#34D399" : "#888", fontWeight: 700 }}>{gscData.live ? "● LIVE" : "● GSC"}</span>}
             {kwData?.configured && <span style={{ fontSize: "0.68rem", padding: "0.15rem 0.45rem", borderRadius: 4, background: "rgba(124,58,237,0.2)", color: "#C4B5FD", fontWeight: 700 }}>● PS{kwData.cached ? " cache" : ""}</span>}
-            <button onClick={onRefreshGSC} disabled={gscLoading} style={{ background: "rgba(255,255,255,0.08)", color: "#CCC", border: "none", borderRadius: 5, width: 26, height: 26, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar GSC">↺</button>
-            <button onClick={onRefreshKW} disabled={kwLoading} style={{ background: "rgba(124,58,237,0.2)", color: "#C4B5FD", border: "none", borderRadius: 5, width: 26, height: 26, fontSize: "0.8rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="Actualizar Prestashop">↺</button>
+
           </div>
         </div>
 
@@ -425,18 +424,18 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
             ["CTR", gscData.resumen.ctr + "%"],
             ["Pos.", gscData.resumen.posicion],
           ].map(([label, value]) => (
-            <div key={label} style={{ flex: 1, background: "rgba(255,255,255,0.06)", borderRadius: 7, padding: "0.4rem 0.3rem", textAlign: "center" }}>
-              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.panelHeaderText, fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: "0.6rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "0.15rem" }}>{label}</div>
+            <div key={label} style={{ flex: 1, background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "0.5rem 0.3rem", textAlign: "center", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 700, color: C.panelHeaderText, fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
+              <div style={{ fontSize: "0.65rem", color: "#aaa", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "0.2rem", fontWeight: 600 }}>{label}</div>
             </div>
           ))}
           {kwData?.resumen && [
             ["Sin cubrir", kwData.resumen.sinCubrir],
             ["Sugeridas", kwData.resumen.sugeridas],
           ].map(([label, value]) => (
-            <div key={label} style={{ flex: 1, background: "rgba(124,58,237,0.15)", borderRadius: 7, padding: "0.4rem 0.3rem", textAlign: "center" }}>
-              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#C4B5FD", fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: "0.6rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: "0.15rem" }}>{label}</div>
+            <div key={label} style={{ flex: 1, background: "rgba(124,58,237,0.18)", borderRadius: 8, padding: "0.5rem 0.3rem", textAlign: "center", border: "1px solid rgba(124,58,237,0.25)" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 700, color: "#C4B5FD", fontFamily: "'Oswald', sans-serif", lineHeight: 1 }}>{value}</div>
+              <div style={{ fontSize: "0.65rem", color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "0.2rem", fontWeight: 600 }}>{label}</div>
             </div>
           ))}
         </div>
@@ -527,11 +526,11 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
             {(gscData.articulosActualizar || []).map((item, i) => (
               <div key={i} style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
                 <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark, marginBottom: "0.3rem", lineHeight: 1.35 }}>{item.pagina}</div>
-                <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.82rem", color: C.muted, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600 }}>{formatNum(item.impresiones)} impr</span>
-                  <span>{formatNum(item.clics)} clics</span>
-                  <span style={{ color: posColor(item.posicion), fontWeight: 600 }}>pos {item.posicion}</span>
-                  <span>CTR {item.ctr}%</span>
+                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#94A3B8", background: "rgba(148,163,184,0.12)", padding: "0.18rem 0.55rem", borderRadius: 20, border: "1px solid rgba(148,163,184,0.2)" }}>{formatNum(item.impresiones)} impr</span>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.green, background: `${C.green}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${C.green}30` }}>{formatNum(item.clics)} clics</span>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: posColor(item.posicion), background: `${posColor(item.posicion)}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${posColor(item.posicion)}30` }}>pos {item.posicion}</span>
+                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.orange, background: `${C.orange}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${C.orange}30` }}>CTR {item.ctr}%</span>
                 </div>
                 {item.url && <a href={`https://ferrolan.es${item.url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.82rem", color: C.red, textDecoration: "none", marginTop: "0.3rem", display: "inline-block", fontWeight: 600 }}>Ver artículo →</a>}
               </div>
