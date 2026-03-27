@@ -1,18 +1,16 @@
 import { kv } from "@vercel/kv";
 
 // ─── Prestashop Categories API ───────────────────────────────────────────────
-// Devuelve el árbol de categorías de Prestashop con link_rewrite para construir
-// la URL oficial de cada categoría en ferrolan.es.
+// Devuelve el árbol de categorías de Prestashop con URL construida desde el nombre.
+// Usa el mismo endpoint que keywords-data.js (sin link_rewrite en display).
 // Excluye la categoría 16 y todos sus descendientes, más las meta-categorías
 // internas de Prestashop (raíz, inicio, etc.).
 // Cachea el resultado 24h en Vercel KV.
 
-// Categorías excluidas: cat 16 (según instrucción) + meta-cats de Prestashop
 const EXCLUIR_RAIZ = new Set([1, 2, 16, 9498, 3554, 8186, 11699]);
-const CACHE_KEY = "prestashop:categories:v2";
+const CACHE_KEY = "prestashop:categories:v3";
 
 // Prestashop devuelve campos multilingüe como { language: [{ attrs: { id }, value }] }
-// Este helper extrae el string, preferentemente en español (id 3 o 2) o el primero disponible
 function getLang(field) {
   if (!field) return "";
   if (typeof field === "string") return field;
@@ -24,12 +22,21 @@ function getLang(field) {
   return String(field);
 }
 
+// Deriva el slug de URL desde el nombre de categoría (igual que Prestashop)
+function slugify(name) {
+  return name
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/ñ/g, "n")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Forzar refresco con ?refresh=true
   const forceRefresh = req.query.refresh === "true";
 
   if (!forceRefresh) {
@@ -47,7 +54,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `${apiUrl}/categories?output_format=JSON&display=[id,name,id_parent,active,level_depth,link_rewrite]&limit=500`;
+    // Mismo formato que keywords-data.js (probado y funcional)
+    const url = `${apiUrl}/categories?output_format=JSON&display=[id,name,id_parent,active,level_depth]&limit=500`;
     const resp = await fetch(url, {
       headers: { Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64") },
     });
@@ -57,7 +65,7 @@ export default async function handler(req, res) {
     }
 
     const json = await resp.json();
-    const all = (json.categories || []).filter((c) => String(c.active) === "1");
+    const all = (json.categories || []).filter((c) => c.active === "1");
 
     // Construir set de IDs excluidos propagando hacia abajo en el árbol
     const excluidos = new Set(EXCLUIR_RAIZ);
@@ -80,7 +88,8 @@ export default async function handler(req, res) {
     // Construir árbol (dos niveles visibles: padre → hijos directos)
     const byId = {};
     validas.forEach((c) => {
-      byId[c.id] = { ...c, children: [], _name: getLang(c.name), _slug: getLang(c.link_rewrite) };
+      const name = getLang(c.name);
+      byId[c.id] = { ...c, children: [], _name: name, _slug: slugify(name) };
     });
 
     const raices = [];
@@ -92,28 +101,28 @@ export default async function handler(req, res) {
       }
     });
 
-    // Ordenar alfabéticamente en cada nivel
     const sortByName = (arr) => arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "es"));
 
     const toNode = (c) => ({
       id: Number(c.id),
       name: c._name,
-      link_rewrite: c._slug,
+      slug: c._slug,
       url: `https://ferrolan.es/es/${c._slug}`,
       children: sortByName(c.children.map(toNode)),
     });
 
     const categories = sortByName(raices.map(toNode));
 
-    const result = { categories };
+    // Debug: devolver también el total de categorías encontradas antes del filtro
+    const result = { categories, _total: all.length, _validas: validas.length };
 
     try {
-      await kv.set(CACHE_KEY, result, { ex: 86400 }); // 24h
+      await kv.set(CACHE_KEY, result, { ex: 86400 });
     } catch { /* no bloquear si KV falla */ }
 
     return res.status(200).json(result);
   } catch (err) {
     console.error("Prestashop categories error:", err);
-    return res.status(200).json({ categories: [], error: err.message, debug: err.stack?.split("\n")[1] });
+    return res.status(200).json({ categories: [], error: err.message });
   }
 }
