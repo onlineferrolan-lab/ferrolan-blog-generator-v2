@@ -1,16 +1,97 @@
 import { kv } from "@vercel/kv";
+import { google } from "googleapis";
+
+// ─── Patrones de contenido ────────────────────────────────────────────────────
 
 // Palabras clave que indican contenido temporal/noticia
-// Nota: se usa \b para evitar falsos positivos (ej. "evento" sí, "eventualmente" no)
-// Se excluyen años sueltos (\d{4}) porque muchos artículos evergreen los mencionan
 const PATRON_NOTICIA = /\bnuevos?\s+(producto|lanzamiento)\b|\blanzamiento\b|\bevento\b|\bpróximo\b|\bferia\b|\bjornada\b|\boferta\b|\bpromoción\b|\bdescuento\b|\bnovedad\b|\btemporada\b|\besta semana\b|\beste mes\b|\beste año\b/i;
 
 // Patrones que indican contenido genuinamente evergreen
 const PATRON_EVERGREEN = /cómo|guía|qué es|diferencia|tipos de|consejos|paso a paso|aprende|elegir|instalar|mantener|cuidar|limpiar|comparativa|cuánto cuesta|presupuesto|solución|errores|ventajas/i;
 
-// Mínimo de días para que un artículo pueda considerarse pilar evergreen
-// 90 días = 3 meses, tiempo suficiente para que el contenido madure y demuestre que no es temporal
-const DIAS_MINIMO_PILAR = 90;
+// ─── Fallback estático ────────────────────────────────────────────────────────
+// Artículos top del blog real de Ferrolan — se usan cuando GSC no está configurado.
+// Datos del análisis GSC de marzo 2026.
+
+const STATIC_BLOG_PILARES = [
+  { titulo: "Combinaciones de azulejos para baños", url: "/blog/las-mejores-combinaciones-de-azulejos-para-banos/", clics: 1640, impresiones: 128253, posicion: 8.9 },
+  { titulo: "Tipos de bloque de hormigón: guía completa", url: "/blog/tipos-de-bloque-de-hormigon-guia-completa/", clics: 815, impresiones: 124445, posicion: 7.4 },
+  { titulo: "Golpe de ariete: por qué hacen ruido las tuberías", url: "/blog/por-que-hacen-ruido-las-tuberias-golpe-de-ariete/", clics: 1162, impresiones: 110827, posicion: 2.9 },
+  { titulo: "Cómo elegir mortero autonivelante", url: "/blog/como-elegir-mortero-autonivelante/", clics: 811, impresiones: 101905, posicion: 5.4 },
+  { titulo: "Cemento cola: cuál usar", url: "/blog/no-tienes-claro-que-cemento-cola-que-debes-usar-te-resolvemos-algunas-dudas-n740/", clics: 654, impresiones: 85789, posicion: 7.9 },
+  { titulo: "Potencia lumínica y downlights LED", url: "/blog/que-potencia-luminica-necesitas-en-funcion-de-los-m2-descubre-los-downlight-led-de-superficie-y-los-lumenes-necesarios-n480/", clics: 813, impresiones: 82520, posicion: 6.1 },
+];
+
+// ─── GSC: fetch de todas las páginas del blog ─────────────────────────────────
+
+async function fetchGSCBlogPages() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY;
+  const siteUrl = process.env.GSC_SITE_URL || "sc-domain:ferrolan.es";
+
+  if (!email || !key) return null; // null → usar fallback estático
+
+  try {
+    const auth = new google.auth.JWT(email, null, key.replace(/\\n/g, "\n"), [
+      "https://www.googleapis.com/auth/webmasters.readonly",
+    ]);
+    const searchconsole = google.searchconsole({ version: "v1", auth });
+
+    // 16 meses hacia atrás (máximo datos históricos de GSC)
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() - 3); // GSC tiene ~3 días de delay
+    const startDate = new Date(endDate);
+    startDate.setMonth(startDate.getMonth() - 16);
+    const fmt = (d) => d.toISOString().split("T")[0];
+
+    const response = await searchconsole.searchanalytics.query({
+      siteUrl,
+      requestBody: {
+        startDate: fmt(startDate),
+        endDate: fmt(endDate),
+        dimensions: ["page"],
+        dimensionFilterGroups: [{
+          filters: [{ dimension: "page", operator: "contains", expression: "/blog/" }],
+        }],
+        rowLimit: 500, // Cubre los ~500 artículos del blog
+        dataState: "final",
+      },
+    });
+
+    return (response.data.rows || []).map((r) => ({
+      url: r.keys[0].replace("https://ferrolan.es", ""),
+      clics: r.clicks,
+      impresiones: r.impressions,
+      posicion: Math.round(r.position * 10) / 10,
+    }));
+  } catch (err) {
+    console.error("GSC blog pages fetch error:", err);
+    return null;
+  }
+}
+
+// ─── Scoring y helpers ────────────────────────────────────────────────────────
+
+// Score para artículos GSC basado en señales de tráfico real
+function scoreGSCPilar(page) {
+  // Clics: escala log 0-50 pts (100 clics → ~40pts, 1000+ → 50pts)
+  const scoreClics = Math.min(50, Math.round(Math.log10(page.clics + 1) * 25));
+  // Impresiones: escala log 0-30 pts
+  const scoreImpresiones = Math.min(30, Math.round(Math.log10(page.impresiones + 1) * 10));
+  // Posición: 20 pts para pos 1, 0 para pos 20+
+  const scorePos = Math.max(0, Math.round(20 - page.posicion));
+  return Math.min(100, scoreClics + scoreImpresiones + scorePos);
+}
+
+// Convierte un slug de URL en un título legible
+function slugToTitulo(url) {
+  const slug = url.split("/blog/")[1]?.replace(/\//g, "") || url;
+  // Limpiar sufijos de tipo -nNNN (IDs heredados de Prestashop)
+  const clean = slug.replace(/-n\d+$/, "").replace(/-/g, " ");
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -18,67 +99,63 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Obtener todos los artículos guardados
+    // ── 1. Artículos del generador (KV) ──────────────────────────────────────
     const ids = await kv.lrange("articles:index", 0, -1);
-    if (!ids || ids.length === 0) {
-      return res.status(200).json({ pilares: [], gaps: [], topicsCovered: [] });
-    }
+    const kvArticulos = ids?.length
+      ? (await Promise.all(ids.map((id) => kv.get(id))))
+          .filter(Boolean)
+          .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
+      : [];
 
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-    const articulos = records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
-      .filter((a) => a.wpStatus !== "draft");
+    // Candidatos KV: título con patrón evergreen, sin filtro de edad
+    const kvPilares = kvArticulos
+      .filter((a) => !PATRON_NOTICIA.test(a.titulo || "") && PATRON_EVERGREEN.test(a.titulo || ""))
+      .map((a) => {
+        const diasAntiguo = Math.floor((new Date() - new Date(a.fecha)) / (1000 * 60 * 60 * 24));
+        return {
+          ...a,
+          fuente: "kv",
+          impactoEstimado: Math.min(40, Math.floor(diasAntiguo / 3)) + 30, // antigüedad + patrón
+          edad: diasAntiguo,
+        };
+      });
 
-    // 2. Criterios para considerar un artículo como candidato evergreen
-    // Requisitos:
-    //   a) Antigüedad mínima de 90 días: el contenido evergreen necesita tiempo para
-    //      demostrar que no es temporal y para acumular autoridad en buscadores
-    //   b) El título no debe contener patrones de noticia/temporalidad
-    //   c) Idealmente el título sugiere contenido informativo/educativo (guías, consejos, etc.)
-    const umbralFecha = new Date();
-    umbralFecha.setDate(umbralFecha.getDate() - DIAS_MINIMO_PILAR);
+    // ── 2. Artículos reales del blog (GSC) ────────────────────────────────────
+    const gscPages = await fetchGSCBlogPages();
+    const blogPages = gscPages || STATIC_BLOG_PILARES;
 
-    const evergreen = articulos.filter((a) => {
-      const fecha = new Date(a.fecha);
-      const esLoSuficientementeAntiguo = fecha <= umbralFecha;
-      const esNoticia = PATRON_NOTICIA.test(a.titulo || "");
-      return esLoSuficientementeAntiguo && !esNoticia;
-    });
+    const gscPilares = blogPages
+      .filter((p) => !PATRON_NOTICIA.test(slugToTitulo(p.url)))
+      .filter((p) => p.impresiones > 100) // solo artículos con tráfico mínimo verificable
+      .map((p) => ({
+        id: p.url,
+        titulo: p.titulo || slugToTitulo(p.url),
+        slug: p.url.split("/blog/")[1]?.replace(/\//g, "") || "",
+        url: p.url,
+        clics: p.clics,
+        impresiones: p.impresiones,
+        posicion: p.posicion,
+        fuente: "gsc",
+        fuente_live: !!gscPages,
+        impactoEstimado: scoreGSCPilar(p),
+        edad: null,
+        fecha: null,
+        categoria: null,
+      }));
 
-    // 3. Ordenar por antigüedad DESC (más antiguo primero): los artículos más antiguos
-    // tienen más tiempo para haber acumulado enlaces, autoridad y tráfico orgánico
-    const evergreenOrdenado = evergreen.sort(
-      (a, b) => new Date(a.fecha) - new Date(b.fecha)
-    );
+    // ── 3. Combinar y deduplicar ──────────────────────────────────────────────
+    // Los artículos de KV tienen prioridad: si un artículo generado coincide en
+    // slug con uno de GSC, prevalece el de KV (datos más completos).
+    const kvSlugSet = new Set(kvPilares.map((a) => a.slug).filter(Boolean));
+    const gscSinDuplicados = gscPilares.filter((p) => !kvSlugSet.has(p.slug));
 
-    // 4. Calcular score de calidad evergreen para cada artículo
-    // Un score más alto indica mayor probabilidad de ser un buen pilar
-    const evergreenConScore = evergreenOrdenado.map((a) => {
-      const diasAntiguo = Math.floor(
-        (new Date() - new Date(a.fecha)) / (1000 * 60 * 60 * 24)
-      );
-      // Bonus por tener patrones de contenido evergreen en el título
-      const tienePatronEvergreen = PATRON_EVERGREEN.test(a.titulo || "");
-      // Score: base por antigüedad (máx 70 puntos) + bonus por patrón (30 puntos)
-      const scoreAntiguedad = Math.min(70, Math.floor(diasAntiguo / 3)); // 1 punto cada 3 días, máx 70
-      const scorePatron = tienePatronEvergreen ? 30 : 0;
-      return {
-        ...a,
-        _scoreEvergreen: scoreAntiguedad + scorePatron,
-        edad: diasAntiguo,
-      };
-    });
+    const todos = [...gscSinDuplicados, ...kvPilares]
+      .sort((a, b) => b.impactoEstimado - a.impactoEstimado)
+      .slice(0, 10);
 
-    // 5. Top 8 pilares por score (combina antigüedad + calidad del título)
-    const pilares = evergreenConScore
-      .sort((a, b) => b._scoreEvergreen - a._scoreEvergreen)
-      .slice(0, 8);
+    // ── 4. Gaps temáticos ─────────────────────────────────────────────────────
+    const topicsCovered = [...new Set(kvArticulos.map((a) => a.categoria || "").filter(Boolean))];
 
-    // 6. Extraer categorías/temas cubiertos para identificar gaps
-    const topicsCovered = [...new Set(articulos.map((a) => a.categoria || "").filter(Boolean))];
-
-    // 7. Definir temas evergreen que típicamente funcionan bien en blogs de materiales
     const EVERGREEN_TOPICS = [
       "Cómo elegir azulejos",
       "Guía de instalación de cerámica",
@@ -96,28 +173,23 @@ export default async function handler(req, res) {
       "Reparación de grietas",
     ];
 
-    // 8. Sugerir gaps: temas que son buenos para blog pero no tenemos
+    // Cruzar topics con URLs del blog real para identificar gaps reales
+    const blogUrlsText = blogPages.map((p) => (p.url || "").toLowerCase()).join(" ");
     const gaps = EVERGREEN_TOPICS.filter((topic) => {
-      const covered = articulos.some(
-        (a) =>
-          a.titulo?.toLowerCase().includes(topic.toLowerCase()) ||
-          a.categoria?.toLowerCase().includes(topic.toLowerCase())
-      );
-      return !covered;
+      const words = topic.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      const cubierto =
+        kvArticulos.some((a) => a.titulo?.toLowerCase().includes(topic.toLowerCase())) ||
+        words.some((w) => blogUrlsText.includes(w));
+      return !cubierto;
     }).slice(0, 4);
 
-    // 9. Calcular impactoEstimado para la visualización (0-100)
-    const pilaresConMetricas = pilares.map((p) => ({
-      ...p,
-      impactoEstimado: Math.min(100, p._scoreEvergreen),
-    }));
-
     return res.status(200).json({
-      pilares: pilaresConMetricas,
+      pilares: todos,
       gaps,
       topicsCovered,
-      totalArticulos: articulos.length,
-      totalEvergreen: evergreen.length,
+      totalArticulos: kvArticulos.length,
+      totalEvergreen: todos.length,
+      gscLive: !!gscPages,
     });
   } catch (err) {
     console.error("Evergreen analysis error:", err);

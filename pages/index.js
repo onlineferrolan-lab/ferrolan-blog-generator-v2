@@ -688,7 +688,9 @@ function EvergreenPanel({ data, loading, onRefresh, onSelectTopic, C }) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
                     <div style={{ fontSize: "0.9rem", fontWeight: 700, color: C.dark, lineHeight: 1.35, flex: 1 }}>{pilar.titulo || pilar.tema}</div>
                     <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#34D399", background: "rgba(52,211,153,0.12)", padding: "0.12rem 0.45rem", borderRadius: 6, whiteSpace: "nowrap", border: "1px solid rgba(52,211,153,0.25)" }}>
-                      {edadLabel(pilar.edad)}
+                      {pilar.fuente === "gsc"
+                        ? `${(pilar.clics || 0).toLocaleString("es")} clics`
+                        : edadLabel(pilar.edad)}
                     </span>
                   </div>
                   {/* Metrics row */}
@@ -696,7 +698,18 @@ function EvergreenPanel({ data, loading, onRefresh, onSelectTopic, C }) {
                     {pilar.categoria && (
                       <span style={{ fontSize: "0.7rem", fontWeight: 600, color: C.red, background: `${C.red}12`, padding: "0.1rem 0.4rem", borderRadius: 4 }}>{pilar.categoria}</span>
                     )}
-                    <span style={{ fontSize: "0.7rem", color: C.muted }}>{pilar.fecha}</span>
+                    {pilar.fuente === "gsc" ? (
+                      <span style={{ fontSize: "0.7rem", color: C.muted }}>
+                        {(pilar.impresiones || 0).toLocaleString("es")} imp · pos {pilar.posicion}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.7rem", color: C.muted }}>{pilar.fecha}</span>
+                    )}
+                    {pilar.fuente === "gsc" && (
+                      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: C.muted, background: C.inputBg, padding: "0.1rem 0.35rem", borderRadius: 4, border: `1px solid ${C.border}` }}>
+                        {pilar.fuente_live ? "GSC LIVE" : "GSC"}
+                      </span>
+                    )}
                     <span style={{ flex: 1 }} />
                     <span style={{ fontSize: "0.65rem", color: C.muted, fontWeight: 600, marginRight: "0.25rem" }}>Impacto</span>
                     {impactBar(pilar.impactoEstimado)}
@@ -717,7 +730,7 @@ function EvergreenPanel({ data, loading, onRefresh, onSelectTopic, C }) {
               ))}
               {(data.pilares || []).length === 0 && (
                 <div style={{ textAlign: "center", padding: "1rem", fontSize: "0.85rem", color: C.muted }}>
-                  Aún no hay artículos con suficiente antigüedad para ser pilares.
+                  No se encontraron pilares evergreen. Configura las credenciales de GSC para ver los artículos reales del blog.
                 </div>
               )}
             </div>
