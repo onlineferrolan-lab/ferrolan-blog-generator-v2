@@ -1738,6 +1738,20 @@ export default function Home() {
     }
   };
 
+  const aplicarMetaEnArticulo = (field, value) => {
+    if (!value || !articulo) return;
+    const metaSep = articulo.indexOf("\n---\n");
+    if (metaSep === -1) return;
+    const cuerpo = articulo.slice(0, metaSep);
+    let metaBloque = articulo.slice(metaSep);
+    if (field === "title") {
+      metaBloque = metaBloque.replace(/\*\*Meta título:\*\*[^\n]*/m, `**Meta título:** ${value}`);
+    } else if (field === "description") {
+      metaBloque = metaBloque.replace(/\*\*Meta descripción:\*\*[^\n]*/m, `**Meta descripción:** ${value}`);
+    }
+    setArticulo(cuerpo + metaBloque);
+  };
+
   const aplicarEnlace = (sentence) => {
     // Reemplaza la primera ocurrencia de la frase original en el artículo
     // buscando el texto del anchor para localizar dónde insertarlo
@@ -2364,67 +2378,148 @@ export default function Home() {
                   )}
 
                   {/* ── KEYWORDS TAB ── */}
-                  {enhanceTab === "keywords" && enhanceResult.keywords && !enhanceResult.keywords.error && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                      {/* Score + primary */}
-                      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                        <div style={{ width: 54, height: 54, borderRadius: "50%", border: `3px solid ${enhanceResult.keywords.score >= 80 ? C.green : enhanceResult.keywords.score >= 60 ? C.orange : C.red}`, background: `${enhanceResult.keywords.score >= 80 ? C.green : enhanceResult.keywords.score >= 60 ? C.orange : C.red}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                          <span style={{ fontSize: "1.1rem", fontWeight: 800, color: enhanceResult.keywords.score >= 80 ? C.green : enhanceResult.keywords.score >= 60 ? C.orange : C.red, fontFamily: "'Oswald', sans-serif" }}>{enhanceResult.keywords.score}</span>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "0.88rem", fontWeight: 700, color: C.dark }}>Keyword: <span style={{ color: "#7C3AED" }}>{enhanceResult.keywords.primary_keyword}</span></div>
-                          <div style={{ fontSize: "0.75rem", color: C.muted }}>{enhanceResult.keywords.word_count} palabras · Densidad: {enhanceResult.keywords.density?.primary?.percent}%
-                            {" "}<span style={{ color: enhanceResult.keywords.density?.primary?.status === "ok" ? C.green : C.orange, fontWeight: 700 }}>({enhanceResult.keywords.density?.primary?.status})</span>
+                  {enhanceTab === "keywords" && enhanceResult.keywords && !enhanceResult.keywords.error && (() => {
+                    const kw = enhanceResult.keywords;
+                    const scoreColor = kw.score >= 80 ? C.green : kw.score >= 60 ? C.orange : C.red;
+                    const addKwToField = (kwText) => {
+                      if (!kwText) return;
+                      const current = keywords.toLowerCase();
+                      if (!current.includes(kwText.toLowerCase())) {
+                        setKeywords(prev => prev ? `${prev}, ${kwText}` : kwText);
+                      }
+                    };
+                    const secondaryKws = (kw.density?.secondary || []).filter(s => s.keyword && s.keyword.length > 2);
+                    const suggestedMeta = kw.suggested_meta || {};
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                        {/* Score + primary keyword */}
+                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                          <div style={{ width: 54, height: 54, borderRadius: "50%", border: `3px solid ${scoreColor}`, background: `${scoreColor}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: "1.1rem", fontWeight: 800, color: scoreColor, fontFamily: "'Oswald', sans-serif" }}>{kw.score}</span>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: C.dark }}>Keyword: <span style={{ color: "#7C3AED" }}>{kw.primary_keyword}</span></div>
+                              {kw.primary_keyword && !keywords.toLowerCase().includes(kw.primary_keyword.toLowerCase()) && (
+                                <button onClick={() => addKwToField(kw.primary_keyword)}
+                                  title="Añadir al campo de keywords"
+                                  style={{ fontSize: "0.65rem", padding: "0.1rem 0.4rem", background: "#7C3AED22", color: "#A78BFA", border: "1px solid #7C3AED44", borderRadius: 4, cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  + Añadir
+                                </button>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: C.muted }}>{kw.word_count} palabras · Densidad: {kw.density?.primary?.percent}%
+                              {" "}<span style={{ color: kw.density?.primary?.status === "ok" ? C.green : C.orange, fontWeight: 700 }}>({kw.density?.primary?.status})</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Location checklist */}
-                      {enhanceResult.keywords.locations && (
-                        <div style={{ background: C.light, borderRadius: 8, padding: "0.65rem 0.85rem" }}>
-                          <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.4rem" }}>Ubicaciones</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.2rem 0.5rem" }}>
-                            {[
-                              ["H1", enhanceResult.keywords.locations.h1],
-                              ["Primeras 100 palabras", enhanceResult.keywords.locations.first_100_words],
-                              [`${enhanceResult.keywords.locations.h2_count} H2 con keyword`, enhanceResult.keywords.locations.h2_count > 0],
-                              ["Último párrafo", enhanceResult.keywords.locations.last_paragraph],
-                              ["Meta título", enhanceResult.keywords.locations.meta_title],
-                              ["Meta descripción", enhanceResult.keywords.locations.meta_description],
-                            ].map(([label, ok]) => (
-                              <div key={label} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: ok ? C.green : C.muted }}>
-                                <span>{ok ? "✓" : "○"}</span><span>{label}</span>
+                        {/* Secondary keywords chips */}
+                        {secondaryKws.length > 0 && (
+                          <div style={{ background: C.light, borderRadius: 8, padding: "0.65rem 0.85rem" }}>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.5rem" }}>Keywords secundarias detectadas</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                              {secondaryKws.map((sec, i) => {
+                                const alreadyAdded = keywords.toLowerCase().includes(sec.keyword.toLowerCase());
+                                const densityColor = sec.status === "ok" ? C.green : sec.status === "high" ? C.red : C.orange;
+                                return (
+                                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.3rem", background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 20, padding: "0.2rem 0.45rem 0.2rem 0.65rem", fontSize: "0.78rem" }}>
+                                    <span style={{ color: C.dark, fontWeight: 600 }}>{sec.keyword}</span>
+                                    <span style={{ color: densityColor, fontSize: "0.68rem", fontWeight: 700 }}>{sec.count}× {sec.percent}%</span>
+                                    <button onClick={() => addKwToField(sec.keyword)} disabled={alreadyAdded}
+                                      title={alreadyAdded ? "Ya está en el campo de keywords" : "Añadir al campo de keywords"}
+                                      style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: alreadyAdded ? C.border : "#7C3AED", color: alreadyAdded ? C.muted : "#FFF", cursor: alreadyAdded ? "default" : "pointer", fontSize: "0.75rem", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1 }}>
+                                      {alreadyAdded ? "✓" : "+"}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Location checklist */}
+                        {kw.locations && (
+                          <div style={{ background: C.light, borderRadius: 8, padding: "0.65rem 0.85rem" }}>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.4rem" }}>Ubicaciones</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.2rem 0.5rem" }}>
+                              {[
+                                ["H1", kw.locations.h1],
+                                ["Primeras 100 palabras", kw.locations.first_100_words],
+                                [`${kw.locations.h2_count} H2 con keyword`, kw.locations.h2_count > 0],
+                                ["Último párrafo", kw.locations.last_paragraph],
+                                ["Meta título", kw.locations.meta_title],
+                                ["Meta descripción", kw.locations.meta_description],
+                              ].map(([label, ok]) => (
+                                <div key={label} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: ok ? C.green : C.muted }}>
+                                  <span>{ok ? "✓" : "○"}</span><span>{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Issues */}
+                        {(kw.issues || []).length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            {kw.issues.map((issue, i) => (
+                              <div key={i} style={{ display: "flex", gap: "0.4rem", alignItems: "flex-start", background: issue.type === "error" ? C.redLight : C.orangeLight, border: `1px solid ${issue.type === "error" ? C.red : C.orange}30`, borderRadius: 7, padding: "0.4rem 0.6rem" }}>
+                                <span style={{ color: issue.type === "error" ? C.red : C.orange, fontWeight: 800, flexShrink: 0 }}>{issue.type === "error" ? "✖" : "⚠"}</span>
+                                <span style={{ fontSize: "0.8rem", color: C.dark, lineHeight: 1.4 }}>{issue.text}</span>
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Issues */}
-                      {(enhanceResult.keywords.issues || []).length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                          {enhanceResult.keywords.issues.map((issue, i) => (
-                            <div key={i} style={{ display: "flex", gap: "0.4rem", alignItems: "flex-start", background: issue.type === "error" ? C.redLight : C.orangeLight, border: `1px solid ${issue.type === "error" ? C.red : C.orange}30`, borderRadius: 7, padding: "0.4rem 0.6rem" }}>
-                              <span style={{ color: issue.type === "error" ? C.red : C.orange, fontWeight: 800, flexShrink: 0 }}>{issue.type === "error" ? "✖" : "⚠"}</span>
-                              <span style={{ fontSize: "0.8rem", color: C.dark, lineHeight: 1.4 }}>{issue.text}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                        {/* Suggested meta — actionable cards */}
+                        {(suggestedMeta.title || suggestedMeta.description) && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Meta sugerida</div>
+                            {suggestedMeta.title && (
+                              <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 0.75rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                                  <div>
+                                    <div style={{ fontSize: "0.65rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", marginBottom: "0.2rem" }}>Meta título ({suggestedMeta.title.length} chars)</div>
+                                    <div style={{ fontSize: "0.8rem", color: C.dark, lineHeight: 1.4 }}>{suggestedMeta.title}</div>
+                                  </div>
+                                  <button onClick={() => aplicarMetaEnArticulo("title", suggestedMeta.title)}
+                                    style={{ flexShrink: 0, padding: "0.25rem 0.65rem", background: "linear-gradient(135deg,#7C3AED,#4F46E5)", color: "#FFF", border: "none", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700, cursor: "pointer", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    Aplicar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {suggestedMeta.description && (
+                              <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.55rem 0.75rem" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: "0.65rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", marginBottom: "0.2rem" }}>Meta descripción ({suggestedMeta.description.length} chars)</div>
+                                    <div style={{ fontSize: "0.8rem", color: C.dark, lineHeight: 1.4 }}>{suggestedMeta.description}</div>
+                                  </div>
+                                  <button onClick={() => aplicarMetaEnArticulo("description", suggestedMeta.description)}
+                                    style={{ flexShrink: 0, padding: "0.25rem 0.65rem", background: "linear-gradient(135deg,#7C3AED,#4F46E5)", color: "#FFF", border: "none", borderRadius: 6, fontSize: "0.72rem", fontWeight: 700, cursor: "pointer", fontFamily: "'Oswald', sans-serif", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                                    Aplicar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-                      {/* Suggestions */}
-                      {(enhanceResult.keywords.suggestions || []).length > 0 && (
-                        <div>
-                          <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Sugerencias</div>
-                          <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-                            {enhanceResult.keywords.suggestions.map((s, i) => (
-                              <li key={i} style={{ fontSize: "0.8rem", color: C.mid, lineHeight: 1.55 }}>{s}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        {/* Suggestions */}
+                        {(kw.suggestions || []).length > 0 && (
+                          <div>
+                            <div style={{ fontSize: "0.68rem", fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.3rem" }}>Sugerencias</div>
+                            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+                              {kw.suggestions.map((s, i) => (
+                                <li key={i} style={{ fontSize: "0.8rem", color: C.mid, lineHeight: 1.55 }}>{s}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* ── CRO TAB ── */}
                   {enhanceTab === "cro" && enhanceResult.cro && !enhanceResult.cro.error && (() => {

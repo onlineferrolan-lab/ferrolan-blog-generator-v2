@@ -109,7 +109,7 @@ ${articulo.slice(0, 2000)}`;
 
 // Agent 3: Keyword Mapper
 // Uses keyword-mapper.md + seo-guidelines context
-// Returns JSON: { primary, density, locations, issues, suggestions }
+// Returns JSON: { primary, density, locations, issues, suggestions, suggested_meta }
 async function runKeywordMapper(provider, { articulo, tema, keywords, ctx }) {
   const agentDef = readAgentDef("keyword-mapper.md");
 
@@ -143,9 +143,14 @@ Devuelve ÚNICAMENTE un JSON válido (sin markdown, sin explicaciones) con esta 
   "suggestions": [
     "sugerencia concreta de mejora"
   ],
+  "suggested_meta": {
+    "title": "Meta título optimizado con keyword principal (máx 60 chars) o null si ya está bien",
+    "description": "Meta descripción optimizada con keyword (máx 155 chars) o null si ya está bien"
+  },
   "score": 82
 }
-Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
+Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".
+Para "suggested_meta": solo incluye título/descripción si los actuales son mejorables o no existen. Usa null si no hay mejora que proponer.`;
 
   const userPrompt = `Analiza la distribución de keywords en este artículo de Ferrolan:
 
