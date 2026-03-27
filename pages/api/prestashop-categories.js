@@ -6,7 +6,14 @@ import { kv } from "@vercel/kv";
 // por el filtro level_depth >= 2 — NO se propaga desde ellas.
 // Cachea el resultado 24h en Vercel KV.
 
-const CACHE_KEY = "prestashop:categories:v8";
+const CACHE_KEY = "prestashop:categories:v9";
+
+// Nombres de categorías a excluir (comparación normalizada, insensible a mayúsculas/acentos)
+const EXCLUIR_NOMBRES = ["busqueda avanzada", "calculadoras de materiales", "productos destacados"];
+
+function normalizar(str) {
+  return (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ñ/g, "n").trim();
+}
 
 function slugify(name) {
   return (name || "")
@@ -66,9 +73,15 @@ export default async function handler(req, res) {
     }
 
     // level_depth >= 2 excluye raíz (0) e inicio (1) naturalmente
-    const validas = all.filter(
-      (c) => Number(c.level_depth) >= 2 && !excluidos.has(Number(c.id))
-    );
+    // También excluir por nombre y categorías sin nombre
+    const validas = all.filter((c) => {
+      if (Number(c.level_depth) < 2) return false;
+      if (excluidos.has(Number(c.id))) return false;
+      const nombre = typeof c.name === "string" ? c.name.trim() : "";
+      if (!nombre) return false;
+      if (EXCLUIR_NOMBRES.includes(normalizar(nombre))) return false;
+      return true;
+    });
 
     const byId = {};
     validas.forEach((c) => {
