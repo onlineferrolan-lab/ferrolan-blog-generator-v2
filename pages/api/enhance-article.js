@@ -155,18 +155,24 @@ Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
 **Artículo completo:**
 ${articulo.slice(0, 4000)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
-  const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const raw = await callAI({ provider, tier: "analysis", systemPrompt, userPrompt, maxTokens: 2048 });
 
-  // Guard against truncated JSON: try to parse, fix if unterminated
+  // Extracción robusta del JSON — maneja markdown fences y texto previo
+  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const jsonStart = cleaned.indexOf("{");
+  const jsonEnd   = cleaned.lastIndexOf("}");
+  if (jsonStart !== -1 && jsonEnd !== -1) cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+
   try {
     return JSON.parse(cleaned);
   } catch {
-    // Attempt to close any open structures so we get partial data
-    const attempts = [cleaned + '"}]}', cleaned + '"]}', cleaned + '"}', cleaned + '}'];
-    for (const attempt of attempts) {
-      try { return JSON.parse(attempt); } catch { /* continue */ }
-    }
+    // Intentar reparar JSON truncado
+    const opens  = (cleaned.match(/\[/g) || []).length - (cleaned.match(/\]/g) || []).length;
+    const bracks = (cleaned.match(/\{/g) || []).length - (cleaned.match(/\}/g) || []).length;
+    let repaired = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "").replace(/,\s*$/, "");
+    for (let i = 0; i < opens;  i++) repaired += "]";
+    for (let i = 0; i < bracks; i++) repaired += "}";
+    try { return JSON.parse(repaired); } catch { /* continue */ }
     throw new Error("Respuesta del agente keywords no es JSON válido");
   }
 }
