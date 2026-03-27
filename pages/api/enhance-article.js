@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../lib/ai-client";
 import fs from "fs";
 import path from "path";
 import { loadAgentContext } from "../../lib/context-loader";
@@ -21,7 +21,7 @@ function readAgentDef(filename) {
 // Agent 1: Internal Linker
 // Uses internal-linker.md + internal-links-map context
 // Returns JSON: { links: [{ url, anchor, placement, sentence }] }
-async function runInternalLinker(client, { articulo, tema, categoria, ctx }) {
+async function runInternalLinker(provider, { articulo, tema, categoria, ctx }) {
   const agentDef = readAgentDef("internal-linker.md");
 
   const systemPrompt = `${agentDef}
@@ -52,14 +52,7 @@ Máximo 4 enlaces. Solo URLs de ferrolan.es. Solo anchor texts descriptivos, nun
 **Artículo:**
 ${articulo}`;
 
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1536,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const raw = msg.content[0]?.text || "{}";
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
   try {
     return JSON.parse(cleaned);
@@ -71,7 +64,7 @@ ${articulo}`;
 // Agent 2: Headline Generator
 // Uses headline-generator.md + brand-voice context
 // Returns JSON: { headlines: [{ title, formula, score, reasoning }] }
-async function runHeadlineGenerator(client, { articulo, tema, keywords, categoria, ctx }) {
+async function runHeadlineGenerator(provider, { articulo, tema, keywords, categoria, ctx }) {
   const agentDef = readAgentDef("headline-generator.md");
 
   const systemPrompt = `${agentDef}
@@ -105,14 +98,7 @@ Genera exactamente 5 titulares alternativos. Máximo 70 caracteres cada uno. Key
 **Artículo:**
 ${articulo.slice(0, 2000)}`;
 
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1536,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const raw = msg.content[0]?.text || "{}";
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
   try {
     return JSON.parse(cleaned);
@@ -124,7 +110,7 @@ ${articulo.slice(0, 2000)}`;
 // Agent 3: Keyword Mapper
 // Uses keyword-mapper.md + seo-guidelines context
 // Returns JSON: { primary, density, locations, issues, suggestions }
-async function runKeywordMapper(client, { articulo, tema, keywords, ctx }) {
+async function runKeywordMapper(provider, { articulo, tema, keywords, ctx }) {
   const agentDef = readAgentDef("keyword-mapper.md");
 
   const systemPrompt = `${agentDef}
@@ -169,14 +155,7 @@ Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
 **Artículo completo:**
 ${articulo.slice(0, 4000)}`;
 
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const raw = msg.content[0]?.text || "{}";
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
 
   // Guard against truncated JSON: try to parse, fix if unterminated
@@ -195,7 +174,7 @@ ${articulo.slice(0, 4000)}`;
 // Agent 4: CRO Analyst
 // Uses cro-analyst.md + brand-voice + internal-links-map
 // Returns JSON: { score, strategy_summary, elements: [{ id, type, label, text, placement, position, reason }] }
-async function runCROAnalyst(client, { articulo, tema, keywords, categoria, ctx }) {
+async function runCROAnalyst(provider, { articulo, tema, keywords, categoria, ctx }) {
   const agentDef = readAgentDef("cro-analyst.md");
 
   const systemPrompt = `${agentDef}
@@ -235,14 +214,7 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const raw = msg.content[0]?.text || "{}";
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
   try {
     return JSON.parse(cleaned);
@@ -258,7 +230,7 @@ ${articulo.slice(0, 3500)}`;
 // Agent 5: Landing Page Optimizer
 // Uses landing-page-optimizer.md + brand-voice + internal-links-map
 // Returns JSON: { score, summary, elements: [{ id, type, label, text, placement, position, reason }] }
-async function runLandingPageOptimizer(client, { articulo, tema, keywords, categoria, ctx }) {
+async function runLandingPageOptimizer(provider, { articulo, tema, keywords, categoria, ctx }) {
   const agentDef = readAgentDef("landing-page-optimizer.md");
 
   const systemPrompt = `${agentDef}
@@ -298,14 +270,7 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const raw = msg.content[0]?.text || "{}";
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
   const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
   try {
     return JSON.parse(cleaned);
@@ -325,27 +290,22 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords, categoria } = req.body;
+  const { articulo, tema, keywords, categoria, provider = "anthropic" } = req.body;
 
   if (!articulo || !tema) {
     return res.status(400).json({ error: "articulo y tema son obligatorios" });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "API key no configurada" });
-  }
-
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const ctx = loadAgentContext();
 
   try {
     // Run all 5 agents in parallel for speed
     const [linkerResult, headlineResult, keywordResult, croResult, landingResult] = await Promise.allSettled([
-      runInternalLinker(client, { articulo, tema, categoria, ctx }),
-      runHeadlineGenerator(client, { articulo, tema, keywords, categoria, ctx }),
-      runKeywordMapper(client, { articulo, tema, keywords, ctx }),
-      runCROAnalyst(client, { articulo, tema, keywords, categoria, ctx }),
-      runLandingPageOptimizer(client, { articulo, tema, keywords, categoria, ctx }),
+      runInternalLinker(provider, { articulo, tema, categoria, ctx }),
+      runHeadlineGenerator(provider, { articulo, tema, keywords, categoria, ctx }),
+      runKeywordMapper(provider, { articulo, tema, keywords, ctx }),
+      runCROAnalyst(provider, { articulo, tema, keywords, categoria, ctx }),
+      runLandingPageOptimizer(provider, { articulo, tema, keywords, categoria, ctx }),
     ]);
 
     return res.status(200).json({

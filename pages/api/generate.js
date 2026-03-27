@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { kv } from "@vercel/kv";
+import { callAI } from "../../lib/ai-client";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
 
@@ -121,14 +121,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlProducto } = req.body;
+  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlProducto, provider = "anthropic" } = req.body;
 
   if (!tema || !categoria) {
     return res.status(400).json({ error: "Tema y categoría son obligatorios" });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "API key no configurada en el servidor" });
+  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
+  }
+  if (provider !== "openai" && !process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada en el servidor" });
   }
 
   // 1. Recuperar historial de KV (no bloquea si falla)
@@ -164,26 +167,14 @@ IMPORTANTE: Usa esta investigación para crear un artículo que cubra los gaps i
 Genera el artículo completo siguiendo todas las instrucciones de estilo editorial. Recuerda consultar el historial de artículos existentes para asegurarte de que el enfoque es nuevo y diferenciado.`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const message = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = message.content[0]?.text || "";
-
-    // Ya no se guarda automáticamente — el usuario decide cuándo publicar
-    // vía /api/save-article
+    const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 2048 });
 
     return res.status(200).json({
       articulo: text,
       historialCount: history.length,
     });
   } catch (err) {
-    console.error("Anthropic error:", err);
+    console.error("AI generation error:", err);
     return res.status(500).json({ error: "Error al generar el artículo. Inténtalo de nuevo." });
   }
 }

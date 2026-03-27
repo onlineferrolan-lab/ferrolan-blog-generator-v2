@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../lib/ai-client";
 
 // ─── Research API ─────────────────────────────────────────────────────────────
 // Analiza el panorama competitivo para un tema dado usando Claude.
@@ -39,14 +39,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, contexto } = req.body;
+  const { tema, categoria, keywords, contexto, provider = "anthropic" } = req.body;
 
   if (!tema) {
     return res.status(400).json({ error: "El tema es obligatorio para investigar." });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "API key no configurada en el servidor" });
+  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
+  }
+  if (provider !== "openai" && !process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada en el servidor" });
   }
 
   const userPrompt = `Analiza el siguiente tema para un artículo de blog de Ferrolan:
@@ -59,16 +62,7 @@ ${contexto ? `**Contexto/idea del autor:** ${contexto}` : ""}
 Devuelve el análisis competitivo en formato JSON.`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      system: RESEARCH_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = message.content[0]?.text || "";
+    const text = await callAI({ provider, tier: "analysis", systemPrompt: RESEARCH_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
 
     // Parse JSON response — limpiar por si Claude envuelve en markdown
     const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
