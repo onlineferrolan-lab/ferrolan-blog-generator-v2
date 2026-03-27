@@ -121,7 +121,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlProducto, provider = "anthropic" } = req.body;
+  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlProducto, urlCategoriaPrestashop, nombreCategoriaPrestashop, provider = "anthropic" } = req.body;
 
   if (!tema || !categoria) {
     return res.status(400).json({ error: "Tema y categoría son obligatorios" });
@@ -153,6 +153,8 @@ export default async function handler(req, res) {
 **Keywords SEO a incluir:** ${keywords || "los que consideres más relevantes para el tema"}
 ${contexto ? `**Contexto e idea concreta del artículo:** ${contexto}` : ""}
 ${urlProducto ? `**URL de producto a referenciar:** ${urlProducto}` : ""}
+${urlCategoriaPrestashop ? `**Categoría de producto de Ferrolan:** ${nombreCategoriaPrestashop} — ${urlCategoriaPrestashop}
+Incluye una mención o enlace natural a esta categoría cuando sea relevante en el artículo.` : ""}
 ${researchData ? `
 **INVESTIGACIÓN PREVIA DEL TEMA:**
 - Secciones que cubren los competidores: ${researchData.competitorInsights?.commonSections?.join(", ") || "No disponible"}
