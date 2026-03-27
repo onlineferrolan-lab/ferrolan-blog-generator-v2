@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     });
 
     // Ordenar alfabéticamente en cada nivel
-    const sortByName = (arr) => arr.sort((a, b) => a._name.localeCompare(b._name, "es"));
+    const sortByName = (arr) => arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "es"));
 
     const toNode = (c) => ({
       id: Number(c.id),
