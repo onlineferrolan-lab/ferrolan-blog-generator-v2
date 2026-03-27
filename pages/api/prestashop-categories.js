@@ -113,8 +113,9 @@ export default async function handler(req, res) {
 
     const categories = sortByName(raices.map(toNode));
 
-    // Debug: devolver también el total de categorías encontradas antes del filtro
-    const result = { categories, _total: all.length, _validas: validas.length };
+    // Debug: muestra el campo name crudo de las primeras categorías válidas para diagnosticar formato PS
+    const _nameSample = validas.slice(0, 3).map(c => ({ id: c.id, name_raw: JSON.stringify(c.name) }));
+    const result = { categories, _total: all.length, _validas: validas.length, _nameSample };
 
     try {
       await kv.set(CACHE_KEY, result, { ex: 86400 });
