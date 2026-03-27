@@ -6,7 +6,7 @@ import { kv } from "@vercel/kv";
 // por el filtro level_depth >= 2 — NO se propaga desde ellas.
 // Cachea el resultado 24h en Vercel KV.
 
-const CACHE_KEY = "prestashop:categories:v10";
+const CACHE_KEY = "prestashop:categories:v11";
 
 // Nombres de categorías a excluir (comparación normalizada, insensible a mayúsculas/acentos)
 const EXCLUIR_NOMBRES = ["busqueda avanzada", "calculadoras de materiales", "productos destacados"];
@@ -103,15 +103,18 @@ export default async function handler(req, res) {
 
     const sortByName = (arr) => arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "es"));
 
-    const toNode = (c) => ({
+    // URL real: ferrolan.es/{slug} para raíces, ferrolan.es/{padre}/{slug} para hijos
+    const toNode = (c, parentSlug = "") => ({
       id: Number(c.id),
       name: c._name,
       slug: c._slug,
-      url: `https://ferrolan.es/es/${c._slug}`,
-      children: sortByName(c.children.map(toNode)),
+      url: parentSlug
+        ? `https://ferrolan.es/${parentSlug}/${c._slug}`
+        : `https://ferrolan.es/${c._slug}`,
+      children: sortByName(c.children.map(child => toNode(child, c._slug))),
     });
 
-    const categories = sortByName(raices.map(toNode));
+    const categories = sortByName(raices.map(c => toNode(c, "")));
     const result = { categories };
 
     try { await kv.set(CACHE_KEY, result, { ex: 86400 }); } catch { /* ok */ }
