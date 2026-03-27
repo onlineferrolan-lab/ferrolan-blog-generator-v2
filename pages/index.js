@@ -1352,8 +1352,9 @@ export default function Home() {
     try {
       const res = await fetch("/api/prestashop-categories");
       const data = await res.json();
+      if (data.error) console.warn("Prestashop categories:", data.error, data.debug || "");
       setPsCategories(data.categories || []);
-    } catch { /* silent */ }
+    } catch (e) { console.warn("fetchPsCategories failed:", e); }
   }, []);
 
   useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories]);
