@@ -73,16 +73,30 @@ ${articulo.slice(0, 4000)}${articulo.length > 4000 ? "\n\n[... artículo truncad
 Devuelve el informe SEO en formato JSON.`;
 
   try {
-    const text = await callAI({ provider, tier: "fast", systemPrompt: SEO_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
-    const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const data = JSON.parse(cleaned);
+    const text = await callAI({ provider, tier: "analysis", systemPrompt: SEO_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
+
+    // Extracción robusta del JSON — maneja markdown fences, texto previo y JSON truncado
+    let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    const jsonStart = cleaned.indexOf("{");
+    const jsonEnd   = cleaned.lastIndexOf("}");
+    if (jsonStart !== -1 && jsonEnd !== -1) cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+
+    let data;
+    try {
+      data = JSON.parse(cleaned);
+    } catch {
+      // Intentar reparar JSON truncado cerrando llaves y corchetes abiertos
+      let repaired = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "").replace(/,\s*$/, "");
+      const opens  = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+      const bracks = (repaired.match(/\{/g) || []).length - (repaired.match(/\}/g) || []).length;
+      for (let i = 0; i < opens;  i++) repaired += "]";
+      for (let i = 0; i < bracks; i++) repaired += "}";
+      data = JSON.parse(repaired);
+    }
 
     return res.status(200).json(data);
   } catch (err) {
     console.error("SEO Analyze API error:", err);
-    if (err instanceof SyntaxError) {
-      return res.status(500).json({ error: "Error al procesar el análisis SEO. Inténtalo de nuevo." });
-    }
     return res.status(500).json({ error: "Error al analizar el artículo. Inténtalo de nuevo." });
   }
 }
