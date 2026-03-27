@@ -1292,6 +1292,10 @@ export default function Home() {
   const [kwData, setKwData] = useState(null);
   const [kwLoading, setKwLoading] = useState(false);
 
+  // Categorías Prestashop (desplegable en formulario)
+  const [psCategories, setPsCategories] = useState([]);
+  const [psCategoria, setPsCategoria] = useState(""); // "Nombre|https://url"
+
   // Evergreen analysis
   const [evergreenData, setEvergreenData] = useState(null);
   const [evergreenLoading, setEvergreenLoading] = useState(true);
@@ -1344,7 +1348,15 @@ export default function Home() {
     setEvergreenLoading(false);
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen]);
+  const fetchPsCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/prestashop-categories");
+      const data = await res.json();
+      setPsCategories(data.categories || []);
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -1360,7 +1372,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/research", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, keywords, contexto, provider }),
+        body: JSON.stringify({ tema, categoria, keywords, contexto, provider, ...(psCategoria ? { nombreCategoriaPrestashop: psCategoria.split("|")[0], urlCategoriaPrestashop: psCategoria.split("|")[1] } : {}) }),
       });
       const data = await res.json();
       if (data.error) setResearchError(data.error);
@@ -1375,6 +1387,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         tema, categoria, keywords, tono, contexto, publico, longitud, intencion, urlProducto, provider,
+        ...(psCategoria ? { nombreCategoriaPrestashop: psCategoria.split("|")[0], urlCategoriaPrestashop: psCategoria.split("|")[1] } : {}),
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
       const data = await res.json();
@@ -1704,6 +1717,21 @@ export default function Home() {
               <div style={{ borderTop: `1px solid ${C.border}` }} />
               <div><label style={labelStyle}>Tema del artículo *</label><input value={tema} onChange={e => setTema(e.target.value)} placeholder="Ej: Tendencias en pavimentos 2026..." style={inputStyle} /></div>
               <div><label style={labelStyle}>Categoría *</label><select value={categoria} onChange={e => setCategoria(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }}><option value="">Selecciona categoría...</option>{CATEGORIAS.map(g => <optgroup key={g.group} label={g.group}>{g.items.map(item => <option key={item} value={item}>{item}</option>)}</optgroup>)}</select></div>
+              <div>
+                <label style={labelStyle}>Categoría de producto <span style={{ color: C.muted, fontWeight: 400, textTransform: "none", fontSize: "0.78rem" }}>(opcional)</span></label>
+                <select value={psCategoria} onChange={e => setPsCategoria(e.target.value)} style={{ ...inputStyle, cursor: "pointer" }} disabled={psCategories.length === 0}>
+                  <option value="">Sin categoría de producto...</option>
+                  {psCategories.map(parent => parent.children?.length > 0 ? (
+                    <optgroup key={parent.id} label={parent.name}>
+                      <option value={`${parent.name}|${parent.url}`}>{parent.name}</option>
+                      {parent.children.map(child => <option key={child.id} value={`${child.name}|${child.url}`}>&nbsp;&nbsp;{child.name}</option>)}
+                    </optgroup>
+                  ) : (
+                    <option key={parent.id} value={`${parent.name}|${parent.url}`}>{parent.name}</option>
+                  ))}
+                </select>
+                {psCategoria && <div style={{ fontSize: "0.72rem", color: C.muted, marginTop: "0.25rem" }}>{psCategoria.split("|")[1]}</div>}
+              </div>
               <div><label style={labelStyle}>Keywords SEO <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={keywords} onChange={e => setKeywords(e.target.value)} placeholder="Ej: suelo porcelánico, exterior" style={inputStyle} /></div>
               <div><label style={labelStyle}>Tono</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{TONOS.map(t => <button key={t} onClick={() => setTono(t)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: tono === t ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: tono === t ? C.redLight : C.cardBg, color: tono === t ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: tono === t ? 700 : 500 }}>{t}</button>)}</div></div>
               <div><label style={labelStyle}>Público objetivo</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{[["General", ""], ["Particulares / DIY", ""], ["Profesionales", ""], ["Arquitectos", ""]].map(([p]) => (<button key={p} onClick={() => setPublico(p)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: publico === p ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: publico === p ? C.redLight : C.cardBg, color: publico === p ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: publico === p ? 700 : 500 }}>{p}</button>))}</div></div>
