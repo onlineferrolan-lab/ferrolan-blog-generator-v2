@@ -13,9 +13,19 @@ function markdownToHtml(md) {
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     // Italics
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Links — prepend ferrolan.es to relative URLs
+    // Links — normaliza URLs de ferrolan.es para el preview
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
-      const fullUrl = url.startsWith("/") ? `https://ferrolan.es${url}` : url;
+      const u = (url || "").trim();
+      let fullUrl;
+      if (u.startsWith("http://") || u.startsWith("https://")) {
+        fullUrl = u; // ya absoluta
+      } else if (/^ferrolan\.es/.test(u)) {
+        fullUrl = `https://${u}`; // dominio desnudo → añadir protocolo
+      } else if (u.startsWith("/")) {
+        fullUrl = `https://ferrolan.es${u}`; // relativa → absoluta para el preview
+      } else {
+        fullUrl = u;
+      }
       return `<a href="${fullUrl}">${text}</a>`;
     })
     // Horizontal rules
@@ -1411,6 +1421,7 @@ export default function Home() {
   const [enhanceTab, setEnhanceTab] = useState("links"); // "links" | "headlines" | "keywords" | "cro" | "landing"
   const [croSelected, setCroSelected] = useState(new Set());
   const [landingSelected, setLandingSelected] = useState(new Set());
+  const [fixingKeywords, setFixingKeywords] = useState(false);
 
   // Keywords data (Prestashop)
   const [kwData, setKwData] = useState(null);
@@ -1579,64 +1590,132 @@ export default function Home() {
     setEnhancing(false);
   };
 
-  // Inserta un elemento CRO/Landing en la sección correcta del artículo
+  // Inserta un elemento CRO/Landing en la posición semánticamente correcta.
+  // Lógica de posicionamiento (en orden de prioridad):
+  //   1. INTRO          → tras el H1
+  //   2. CIERRE         → en la ÚLTIMA sección H2 (al fin)
+  //   3. H2: <nombre>   → sección que mejor encaje (fuzzy matching con solapamiento de palabras)
+  //   4. Fallback       → según tipo: objección → 2ª sección; CTA/prueba → última sección
+  // Siempre antes del bloque de metadatos SEO (delimitado por \n---\n).
   const aplicarElementoEnArticulo = (element) => {
     if (!element?.text) return;
-    const { text, placement, position } = element;
+    const { text, placement, position, type } = element;
 
-    // Extraer nombre de sección de "H2: Nombre" o usar marcadores especiales
-    const h2Match = placement?.match(/H2:\s*(.+)/i);
-    const isIntro  = /^INTRO$/i.test(placement);
-    const isCierre = /^CIERRE$/i.test(placement);
+    // ── Separar cuerpo del bloque meta ─────────────────────────────────────
+    const metaIdx = articulo.indexOf("\n---\n");
+    const cuerpo     = metaIdx !== -1 ? articulo.slice(0, metaIdx) : articulo;
+    const metaBloque = metaIdx !== -1 ? articulo.slice(metaIdx) : "";
+    const reconstruir = (nuevoCuerpo) => setArticulo(nuevoCuerpo + metaBloque);
 
-    const lines = articulo.split("\n");
+    const lines = cuerpo.split("\n");
 
-    if (isIntro) {
-      // Insertar tras el H1
-      const h1Idx = lines.findIndex(l => l.match(/^# /));
-      const insertAt = h1Idx >= 0 ? h1Idx + 1 : 0;
-      lines.splice(insertAt, 0, "", text, "");
-      setArticulo(lines.join("\n"));
-      return;
-    }
+    // ── Índice de todas las secciones H2 ───────────────────────────────────
+    const h2Indices = lines.reduce((acc, l, i) => { if (/^## /.test(l)) acc.push(i); return acc; }, []);
 
-    if (isCierre || !h2Match) {
-      // Appender al final
-      setArticulo(articulo + "\n\n" + text);
-      return;
-    }
-
-    const targetSection = h2Match[1].trim().toLowerCase();
-    let sectionIdx = -1;
-    let nextH2Idx  = -1;
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].match(/^## /)) {
-        const h2text = lines[i].replace(/^## /, "").toLowerCase();
-        if (h2text.includes(targetSection) || targetSection.includes(h2text)) {
-          sectionIdx = i;
-          for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].match(/^## /)) { nextH2Idx = j; break; }
-          }
-          break;
+    // Helper: inserta text en una sección (sectionIdx = línea del H2)
+    const insertarEnSeccion = (sectIdx, nextSectIdx, pos) => {
+      if (pos === "inicio") {
+        lines.splice(sectIdx + 1, 0, "", text, "");
+      } else {
+        // fin: justo antes de la siguiente sección (o al final del cuerpo)
+        if (nextSectIdx !== -1) {
+          lines.splice(nextSectIdx, 0, text, "");
+        } else {
+          lines.push("", text);
         }
       }
-    }
+      reconstruir(lines.join("\n"));
+    };
 
-    if (sectionIdx === -1) {
-      // Sección no encontrada → append al final
-      setArticulo(articulo + "\n\n" + text);
+    // ── 1. INTRO: tras el H1 ───────────────────────────────────────────────
+    const isIntro  = /^INTRO$/i.test(placement);
+    if (isIntro) {
+      const h1Idx = lines.findIndex(l => /^# /.test(l));
+      lines.splice(h1Idx >= 0 ? h1Idx + 1 : 0, 0, "", text, "");
+      reconstruir(lines.join("\n"));
       return;
     }
 
-    if (position === "inicio") {
-      lines.splice(sectionIdx + 1, 0, "", text, "");
-    } else if (nextH2Idx !== -1) {
-      lines.splice(nextH2Idx, 0, text, "");
-    } else {
-      lines.push("", text);
+    // ── 2. CIERRE: última sección H2, al fin ───────────────────────────────
+    const isCierre = /^CIERRE$/i.test(placement);
+    if (isCierre) {
+      if (h2Indices.length > 0) {
+        const lastIdx = h2Indices[h2Indices.length - 1];
+        insertarEnSeccion(lastIdx, -1, "fin");
+      } else {
+        lines.push("", text);
+        reconstruir(lines.join("\n"));
+      }
+      return;
     }
-    setArticulo(lines.join("\n"));
+
+    // ── 3. H2 específico: fuzzy matching ───────────────────────────────────
+    const h2Match = placement?.match(/H2:\s*(.+)/i);
+    if (h2Match) {
+      const targetSection = h2Match[1].trim().toLowerCase();
+      // Palabras significativas del target (> 3 caracteres)
+      const targetWords = targetSection.split(/\s+/).filter(w => w.length > 3);
+
+      let bestIdx = -1;
+      let bestScore = 0;
+      let bestNextIdx = -1;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!/^## /.test(lines[i])) continue;
+        const h2text = lines[i].replace(/^## /, "").trim().toLowerCase();
+
+        // Puntuación: containment exacto pesa más; solapamiento de palabras
+        let score = 0;
+        if (h2text.includes(targetSection) || targetSection.includes(h2text)) {
+          score = 2;
+        } else if (targetWords.length > 0) {
+          const h2Words = h2text.split(/\s+/);
+          const matched = targetWords.filter(w => h2Words.some(hw => hw.includes(w) || w.includes(hw))).length;
+          score = matched / targetWords.length; // 0–1
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+          bestNextIdx = -1;
+          for (let j = i + 1; j < lines.length; j++) {
+            if (/^## /.test(lines[j])) { bestNextIdx = j; break; }
+          }
+        }
+      }
+
+      if (bestScore >= 0.5) {
+        insertarEnSeccion(bestIdx, bestNextIdx, position || "fin");
+        return;
+      }
+      // Si no hay match suficiente, cae al fallback por tipo
+    }
+
+    // ── 4. Fallback por tipo del elemento ──────────────────────────────────
+    if (h2Indices.length === 0) {
+      lines.push("", text);
+      reconstruir(lines.join("\n"));
+      return;
+    }
+
+    // Tipos que van al principio del artículo (tras intro/1ª sección)
+    const isEarlyType = /^(objecion|objecci|especificidad|reciprocidad)$/i.test(type || "");
+    // Tipos que van al final (antes del cierre)
+    const isLateType  = /^(cta|prueba_social|urgencia_etica|escasez_etica|compromiso)$/i.test(type || "");
+
+    let targetIdx, nextIdx;
+
+    if (isEarlyType && h2Indices.length >= 2) {
+      // Segunda sección (después de la intro/primera H2)
+      targetIdx = h2Indices[1];
+      nextIdx   = h2Indices[2] ?? -1;
+    } else {
+      // Última sección (CTA, prueba social, cierre, o tipo desconocido)
+      targetIdx = h2Indices[h2Indices.length - 1];
+      nextIdx   = -1;
+    }
+
+    insertarEnSeccion(targetIdx, nextIdx, position || "fin");
   };
 
   const aplicarSeleccionados = (elements, selectedSet) => {
@@ -1657,6 +1736,24 @@ export default function Home() {
       toApply.slice(1).forEach((el, i) => {
         setTimeout(() => aplicarElementoEnArticulo(el), (i + 1) * 50);
       });
+    }
+  };
+
+  const handleFixKeywords = async () => {
+    if (!articulo || !enhanceResult?.keywords) return;
+    setFixingKeywords(true);
+    try {
+      const res = await fetch("/api/fix-keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articulo, tema, keywords, keywordAnalysis: enhanceResult.keywords, provider }),
+      });
+      const data = await res.json();
+      if (data.articulo) setArticulo(data.articulo);
+    } catch (e) {
+      console.error("fix-keywords error:", e);
+    } finally {
+      setFixingKeywords(false);
     }
   };
 
@@ -2344,6 +2441,17 @@ export default function Home() {
                             ))}
                           </ul>
                         </div>
+                      )}
+
+                      {/* Fix keywords button */}
+                      {((enhanceResult.keywords.issues || []).some(i => i.type === "error" || i.type === "warning") ||
+                        !enhanceResult.keywords.locations?.last_paragraph ||
+                        !enhanceResult.keywords.locations?.h1 ||
+                        enhanceResult.keywords.density?.primary?.status !== "ok") && (
+                        <button onClick={handleFixKeywords} disabled={fixingKeywords}
+                          style={{ width: "100%", padding: "0.65rem", background: fixingKeywords ? "#5B21B6" : "linear-gradient(135deg,#7C3AED,#4F46E5)", color: "#FFF", border: "none", borderRadius: 8, fontSize: "0.82rem", fontWeight: 700, cursor: fixingKeywords ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.04em", textTransform: "uppercase", opacity: fixingKeywords ? 0.75 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem" }}>
+                          {fixingKeywords ? <>⏳ Optimizando keywords…</> : <>✦ Corregir keywords en el artículo</>}
+                        </button>
                       )}
                     </div>
                   )}
