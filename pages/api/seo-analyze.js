@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../lib/ai-client";
 
 // ─── SEO Analyze API ──────────────────────────────────────────────────────────
 // Analiza un artículo generado y devuelve un informe SEO estructurado.
@@ -49,14 +49,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords } = req.body;
+  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
 
   if (!articulo) {
     return res.status(400).json({ error: "El artículo es obligatorio para analizar." });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "API key no configurada en el servidor" });
+  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
+  }
+  if (provider !== "openai" && !process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada en el servidor" });
   }
 
   const userPrompt = `Analiza el siguiente artículo para SEO:
@@ -70,16 +73,7 @@ ${articulo.slice(0, 4000)}${articulo.length > 4000 ? "\n\n[... artículo truncad
 Devuelve el informe SEO en formato JSON.`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: SEO_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = message.content[0]?.text || "";
+    const text = await callAI({ provider, tier: "fast", systemPrompt: SEO_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
     const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
     const data = JSON.parse(cleaned);
 

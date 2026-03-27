@@ -147,6 +147,24 @@ function ThemeToggle({ isDark, onToggle }) {
   );
 }
 
+function ProviderToggle({ provider, onToggle, C }) {
+  const isOpenAI = provider === "openai";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", background: C.inputBg, border: `1px solid ${C.border}`, borderRadius: 20, padding: "3px 4px" }}>
+      <button
+        onClick={() => onToggle("anthropic")}
+        title="Usar Claude (Anthropic)"
+        style={{ padding: "3px 11px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, fontFamily: "'Oswald', sans-serif", letterSpacing: "0.04em", background: !isOpenAI ? C.red : "transparent", color: !isOpenAI ? "#fff" : C.muted, transition: "all 0.2s" }}
+      >Claude</button>
+      <button
+        onClick={() => onToggle("openai")}
+        title="Usar ChatGPT (OpenAI)"
+        style={{ padding: "3px 11px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, fontFamily: "'Oswald', sans-serif", letterSpacing: "0.04em", background: isOpenAI ? "#10A37F" : "transparent", color: isOpenAI ? "#fff" : C.muted, transition: "all 0.2s" }}
+      >ChatGPT</button>
+    </div>
+  );
+}
+
 function MarkdownRenderer({ content, C }) {
   const parseInline = (text) => text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\[([^\]]+)\]\(([^)]+)\)/g, `<a href="https://ferrolan.es$2" style="color:${C.red};text-decoration:underline;font-weight:600" target="_blank">$1</a>`);
   const lines = content.split("\n"); const elements = []; let listItems = []; let key = 0;
@@ -804,7 +822,7 @@ function SavedArticlesPanel({ articles, onRefresh, C }) {
 
 // ─── SEO Analysis Panel ──────────────────────────────────────────────────────
 
-function SEOPanel({ articulo, tema, keywords, C }) {
+function SEOPanel({ articulo, tema, keywords, provider = "anthropic", C }) {
   const [seoData, setSeoData] = useState(null);
   const [seoLoading, setSeoLoading] = useState(false);
   const [seoError, setSeoError] = useState("");
@@ -821,7 +839,7 @@ function SEOPanel({ articulo, tema, keywords, C }) {
       const res = await fetch("/api/seo-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articulo, tema, keywords }),
+        body: JSON.stringify({ articulo, tema, keywords, provider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error en el análisis SEO");
@@ -840,7 +858,7 @@ function SEOPanel({ articulo, tema, keywords, C }) {
       const res = await fetch("/api/meta-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articulo, tema, keywords }),
+        body: JSON.stringify({ articulo, tema, keywords, provider }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error generando metas");
@@ -1227,6 +1245,7 @@ export default function Home() {
   const [draggedImg, setDraggedImg] = useState(null);
   const [imageError, setImageError] = useState("");
   const [isDark, setIsDark] = useState(true);
+  const [provider, setProvider] = useState("anthropic");
   const [gscData, setGscData] = useState(null);
   const [gscLoading, setGscLoading] = useState(true);
   const [gscError, setGscError] = useState("");
@@ -1328,7 +1347,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/research", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, keywords, contexto }),
+        body: JSON.stringify({ tema, categoria, keywords, contexto, provider }),
       });
       const data = await res.json();
       if (data.error) setResearchError(data.error);
@@ -1342,7 +1361,7 @@ export default function Home() {
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, urlProducto,
+        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, urlProducto, provider,
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
       const data = await res.json();
@@ -1388,7 +1407,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/enhance-article", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articulo, tema, keywords, categoria }),
+        body: JSON.stringify({ articulo, tema, keywords, categoria, provider }),
       });
       const data = await res.json();
       setEnhanceResult(data);
@@ -1626,12 +1645,13 @@ export default function Home() {
             );
           })()}
           <span style={{ fontSize: "0.82rem", color: C.muted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontFamily: "'Oswald', sans-serif" }}>Generador · Herramienta interna</span>
+          <ProviderToggle provider={provider} onToggle={setProvider} C={C} />
           <ThemeToggle isDark={isDark} onToggle={() => setIsDark(!isDark)} />
         </div>
       </header>
 
       <div style={{ background: C.red, padding: "0.45rem 2.5rem" }}>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · Claude AI + OpenAI Images · GSC + Keywords Prestashop</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontFamily: "'Oswald', sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>Blog · {provider === "openai" ? "ChatGPT (gpt-4o)" : "Claude AI"} + OpenAI Images · GSC + Keywords Prestashop</p>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════ */}
@@ -2261,7 +2281,7 @@ export default function Home() {
 
           {/* ── Right sidebar: SEO ── */}
           <div style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
-            <SEOPanel articulo={articulo} tema={tema} keywords={keywords} C={C} />
+            <SEOPanel articulo={articulo} tema={tema} keywords={keywords} provider={provider} C={C} />
           </div>
         </div>
       </div>

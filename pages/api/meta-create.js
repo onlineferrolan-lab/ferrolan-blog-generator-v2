@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../lib/ai-client";
 
 // ─── Meta Creator API ─────────────────────────────────────────────────────────
 // Genera opciones de meta título y descripción para un artículo de Ferrolan.
@@ -49,14 +49,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords } = req.body;
+  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
 
   if (!tema && !articulo) {
     return res.status(400).json({ error: "El tema o el artículo son necesarios para generar metas." });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "API key no configurada en el servidor" });
+  if (provider === "openai" && !process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
+  }
+  if (provider !== "openai" && !process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada en el servidor" });
   }
 
   // Extract H1 and intro from the article for better meta generation
@@ -74,16 +77,7 @@ ${intro ? `**Intro del artículo:**\n${intro}` : ""}
 Responde con el JSON de las 3 opciones.`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      system: META_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = message.content[0]?.text || "";
+    const text = await callAI({ provider, tier: "fast", systemPrompt: META_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
     const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
     const data = JSON.parse(cleaned);
 
