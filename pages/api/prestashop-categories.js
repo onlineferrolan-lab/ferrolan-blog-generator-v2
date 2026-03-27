@@ -8,16 +8,21 @@ import { kv } from "@vercel/kv";
 // Cachea el resultado 24h en Vercel KV.
 
 const EXCLUIR_RAIZ = new Set([1, 2, 16, 9498, 3554, 8186, 11699]);
-const CACHE_KEY = "prestashop:categories:v3";
+const CACHE_KEY = "prestashop:categories:v5";
 
-// Prestashop devuelve campos multilingüe como { language: [{ attrs: { id }, value }] }
+// Prestashop JSON (convertido desde XML) puede usar varios formatos para campos multilingüe:
+// { language: [{ "@attributes": { id: "3" }, "#text": "Nombre" }] }   ← XML→JSON clásico
+// { language: [{ attrs: { id: "3" }, value: "Nombre" }] }             ← formato alternativo
+// { language: [{ id: "3", value: "Nombre" }] }                        ← formato simplificado
 function getLang(field) {
   if (!field) return "";
   if (typeof field === "string") return field;
   if (field.language) {
     const langs = Array.isArray(field.language) ? field.language : [field.language];
-    const es = langs.find(l => ["2", "3", 2, 3].includes(l.attrs?.id));
-    return String((es || langs[0])?.value || "");
+    const getId = l => l?.["@attributes"]?.id ?? l?.attrs?.id ?? l?.id;
+    const getVal = l => l?.["#text"] ?? l?.value ?? "";
+    const es = langs.find(l => ["2", "3", 2, 3].includes(String(getId(l))));
+    return String(getVal(es || langs[0]));
   }
   return String(field);
 }
@@ -54,8 +59,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Mismo formato que keywords-data.js (probado y funcional)
-    const url = `${apiUrl}/categories?output_format=JSON&display=[id,name,id_parent,active,level_depth]&limit=500`;
+    // language=3 = español en ferrolan.es → devuelve name como string plano en lugar de objeto multilingüe null
+    const url = `${apiUrl}/categories?output_format=JSON&language=3&display=[id,name,id_parent,active,level_depth]&limit=500`;
     const resp = await fetch(url, {
       headers: { Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64") },
     });
