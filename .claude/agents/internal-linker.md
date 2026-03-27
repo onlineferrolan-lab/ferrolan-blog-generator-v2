@@ -67,16 +67,16 @@ Referencia obligatoria a `@context/internal-links-map.md` para:
 
 | Categoría | URL | Temas Asociados |
 |-----------|-----|-----------------|
-| Baños | ferrolan.es/banos | Reformas de baño, sanitarios, tendencias baño |
-| Lavabos | ferrolan.es/banos/lavabos | Tipos de lavabo, diseño de aseo |
-| Azulejos | ferrolan.es/azulejos | Revestimientos, cerámica, paredes, suelos cerámicos |
-| Cocinas | ferrolan.es/cocinas | Reformas de cocina, diseño, encimeras |
-| Parquet | ferrolan.es/parquet | Suelos de madera, laminados, tarima, vinílicos |
-| Construcción | ferrolan.es/construccion | Materiales de obra, albañilería, estructura |
-| Jardinería | ferrolan.es/jardineria | Jardín, terraza, exterior, riego |
-| Ferretería | ferrolan.es/ferreteria | Bricolaje, herramientas, reparaciones |
-| Tiendas | ferrolan.es/tiendas | Visitas, exposición, asesoramiento |
-| Contacto | ferrolan.es/contacto | Consultas, presupuestos, dudas |
+| Baños | https://ferrolan.es/banos | Reformas de baño, sanitarios, tendencias baño |
+| Lavabos | https://ferrolan.es/banos/lavabos | Tipos de lavabo, diseño de aseo |
+| Azulejos | https://ferrolan.es/azulejos | Revestimientos, cerámica, paredes, suelos cerámicos |
+| Cocinas | https://ferrolan.es/cocinas | Reformas de cocina, diseño, encimeras |
+| Parquet | https://ferrolan.es/parquet | Suelos de madera, laminados, tarima, vinílicos |
+| Construcción | https://ferrolan.es/construccion | Materiales de obra, albañilería, estructura |
+| Jardinería | https://ferrolan.es/jardineria | Jardín, terraza, exterior, riego |
+| Ferretería | https://ferrolan.es/ferreteria | Bricolaje, herramientas, reparaciones |
+| Tiendas | https://ferrolan.es/tiendas | Visitas, exposición, asesoramiento |
+| Contacto | https://ferrolan.es/contacto | Consultas, presupuestos, dudas |
 
 ### Paso 3: Estrategia de Colocación
 

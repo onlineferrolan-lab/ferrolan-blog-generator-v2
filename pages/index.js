@@ -13,9 +13,19 @@ function markdownToHtml(md) {
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     // Italics
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Links — prepend ferrolan.es to relative URLs
+    // Links — normaliza URLs de ferrolan.es para el preview
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => {
-      const fullUrl = url.startsWith("/") ? `https://ferrolan.es${url}` : url;
+      const u = (url || "").trim();
+      let fullUrl;
+      if (u.startsWith("http://") || u.startsWith("https://")) {
+        fullUrl = u; // ya absoluta
+      } else if (/^ferrolan\.es/.test(u)) {
+        fullUrl = `https://${u}`; // dominio desnudo → añadir protocolo
+      } else if (u.startsWith("/")) {
+        fullUrl = `https://ferrolan.es${u}`; // relativa → absoluta para el preview
+      } else {
+        fullUrl = u;
+      }
       return `<a href="${fullUrl}">${text}</a>`;
     })
     // Horizontal rules
