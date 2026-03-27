@@ -1749,7 +1749,16 @@ export default function Home() {
         body: JSON.stringify({ articulo, tema, keywords, keywordAnalysis: enhanceResult.keywords, provider }),
       });
       const data = await res.json();
-      if (data.articulo) setArticulo(data.articulo);
+      if (!data.articulo) return;
+      setArticulo(data.articulo);
+      // Re-analizar con el artículo corregido para refrescar ubicaciones, score y warnings
+      const kwRes = await fetch("/api/keyword-mapper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articulo: data.articulo, tema, keywords, provider }),
+      });
+      const kwData = await kwRes.json();
+      if (!kwData.error) setEnhanceResult(prev => ({ ...prev, keywords: kwData }));
     } catch (e) {
       console.error("fix-keywords error:", e);
     } finally {
