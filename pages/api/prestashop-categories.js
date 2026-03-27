@@ -9,6 +9,20 @@ import { kv } from "@vercel/kv";
 
 // Categorías excluidas: cat 16 (según instrucción) + meta-cats de Prestashop
 const EXCLUIR_RAIZ = new Set([1, 2, 16, 9498, 3554, 8186, 11699]);
+const CACHE_KEY = "prestashop:categories:v2";
+
+// Prestashop devuelve campos multilingüe como { language: [{ attrs: { id }, value }] }
+// Este helper extrae el string, preferentemente en español (id 3 o 2) o el primero disponible
+function getLang(field) {
+  if (!field) return "";
+  if (typeof field === "string") return field;
+  if (field.language) {
+    const langs = Array.isArray(field.language) ? field.language : [field.language];
+    const es = langs.find(l => ["2", "3", 2, 3].includes(l.attrs?.id));
+    return String((es || langs[0])?.value || "");
+  }
+  return String(field);
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -20,7 +34,7 @@ export default async function handler(req, res) {
 
   if (!forceRefresh) {
     try {
-      const cached = await kv.get("prestashop:categories");
+      const cached = await kv.get(CACHE_KEY);
       if (cached) return res.status(200).json(cached);
     } catch { /* continuar sin caché */ }
   }
@@ -43,7 +57,7 @@ export default async function handler(req, res) {
     }
 
     const json = await resp.json();
-    const all = (json.categories || []).filter((c) => c.active === "1");
+    const all = (json.categories || []).filter((c) => String(c.active) === "1");
 
     // Construir set de IDs excluidos propagando hacia abajo en el árbol
     const excluidos = new Set(EXCLUIR_RAIZ);
@@ -65,7 +79,9 @@ export default async function handler(req, res) {
 
     // Construir árbol (dos niveles visibles: padre → hijos directos)
     const byId = {};
-    validas.forEach((c) => { byId[c.id] = { ...c, children: [] }; });
+    validas.forEach((c) => {
+      byId[c.id] = { ...c, children: [], _name: getLang(c.name), _slug: getLang(c.link_rewrite) };
+    });
 
     const raices = [];
     validas.forEach((c) => {
@@ -77,13 +93,13 @@ export default async function handler(req, res) {
     });
 
     // Ordenar alfabéticamente en cada nivel
-    const sortByName = (arr) => arr.sort((a, b) => a.name.localeCompare(b.name, "es"));
+    const sortByName = (arr) => arr.sort((a, b) => a._name.localeCompare(b._name, "es"));
 
     const toNode = (c) => ({
       id: Number(c.id),
-      name: c.name,
-      link_rewrite: c.link_rewrite,
-      url: `https://ferrolan.es/es/${c.link_rewrite}`,
+      name: c._name,
+      link_rewrite: c._slug,
+      url: `https://ferrolan.es/es/${c._slug}`,
       children: sortByName(c.children.map(toNode)),
     });
 
@@ -92,12 +108,12 @@ export default async function handler(req, res) {
     const result = { categories };
 
     try {
-      await kv.set("prestashop:categories", result, { ex: 86400 }); // 24h
+      await kv.set(CACHE_KEY, result, { ex: 86400 }); // 24h
     } catch { /* no bloquear si KV falla */ }
 
     return res.status(200).json(result);
   } catch (err) {
     console.error("Prestashop categories error:", err);
-    return res.status(200).json({ categories: [], error: err.message });
+    return res.status(200).json({ categories: [], error: err.message, debug: err.stack?.split("\n")[1] });
   }
 }
