@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, articulo } = req.body;
+  const { tema, categoria, keywords, tono, articulo, wpCategoryId } = req.body;
 
   if (!articulo || !tema) {
     return res.status(400).json({ error: "Faltan datos: tema y artículo son obligatorios" });
@@ -70,6 +70,7 @@ export default async function handler(req, res) {
       slug: slug || undefined,
       excerpt: metaDescription || undefined,
       tags: tagIds.length > 0 ? tagIds : undefined,
+      categories: wpCategoryId ? [Number(wpCategoryId)] : undefined,
     };
 
     const wpRes = await fetch(`${apiUrl}/posts`, {

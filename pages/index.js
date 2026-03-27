@@ -1414,6 +1414,8 @@ export default function Home() {
   // Publish to WordPress
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState(null);
+  const [wpCategories, setWpCategories] = useState([]);
+  const [wpCategoryId, setWpCategoryId] = useState("");
 
   // Agent pipeline (enhance-article)
   const [enhancing, setEnhancing] = useState(false);
@@ -1504,7 +1506,10 @@ export default function Home() {
     } catch (e) { console.warn("fetchPsCategories failed:", e); }
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); fetchSyncMeta(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories, fetchSyncMeta]);
+  useEffect(() => {
+    fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); fetchSyncMeta();
+    fetch("/api/wp-categories").then(r => r.ok ? r.json() : []).then(cats => { if (Array.isArray(cats)) setWpCategories(cats); }).catch(() => {});
+  }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories, fetchSyncMeta]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -1822,7 +1827,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/publish-now", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tema, categoria, keywords, tono, articulo }),
+        body: JSON.stringify({ tema, categoria, keywords, tono, articulo, wpCategoryId: wpCategoryId || undefined }),
       });
       const data = await res.json();
       if (data.published) {
@@ -2248,6 +2253,22 @@ export default function Home() {
                     {scheduleSuccess ? <span className="save-check">✓ Programado</span> : <>📅 Programar</>}
                   </button>
 
+                  {wpCategories.length > 0 && (
+                    <select value={wpCategoryId} onChange={e => setWpCategoryId(e.target.value)}
+                      style={{ background: C.cardBg, color: C.dark, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.45rem 0.65rem", fontSize: "0.8rem", cursor: "pointer", maxWidth: 160 }}>
+                      <option value="">Categoría WP</option>
+                      {(() => {
+                        const parents = wpCategories.filter(c => c.parent === 0);
+                        const children = wpCategories.filter(c => c.parent !== 0);
+                        return parents.flatMap(p => [
+                          <option key={p.id} value={p.id}>{p.name}</option>,
+                          ...children.filter(c => c.parent === p.id).map(c => (
+                            <option key={c.id} value={c.id}>· {c.name}</option>
+                          )),
+                        ]);
+                      })()}
+                    </select>
+                  )}
                   <button onClick={publicarEnWP} disabled={publishing || !!publishResult}
                     style={{ background: publishResult ? "#DC2626" : publishing ? "#991B1B" : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.2rem", fontSize: "0.85rem", cursor: publishing ? "not-allowed" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", alignItems: "center", gap: "0.4rem" }}
                     onMouseOver={e => !publishing && !publishResult && (e.currentTarget.style.background = C.redDark)}
