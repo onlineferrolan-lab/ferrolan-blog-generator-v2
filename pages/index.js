@@ -1238,7 +1238,6 @@ export default function Home() {
   const [publico, setPublico] = useState("General");
   const [longitud, setLongitud] = useState("Estándar");
   const [intencion, setIntencion] = useState("Informativa");
-  const [urlProducto, setUrlProducto] = useState("");
   const [contexto, setContexto] = useState("");
   const [articulo, setArticulo] = useState("");
 
@@ -1387,7 +1386,7 @@ export default function Home() {
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, urlProducto, provider,
+        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, provider,
         ...(psCategoria ? { nombreCategoriaPrestashop: psCategoria.split("|")[0], urlCategoriaPrestashop: psCategoria.split("|")[1] } : {}),
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
@@ -1738,7 +1737,6 @@ export default function Home() {
               <div><label style={labelStyle}>Público objetivo</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{[["General", ""], ["Particulares / DIY", ""], ["Profesionales", ""], ["Arquitectos", ""]].map(([p]) => (<button key={p} onClick={() => setPublico(p)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: publico === p ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: publico === p ? C.redLight : C.cardBg, color: publico === p ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: publico === p ? 700 : 500 }}>{p}</button>))}</div></div>
               <div><label style={labelStyle}>Longitud objetivo</label><div style={{ display: "flex", gap: "0.35rem" }}>{[["Corto", "~600 pal"], ["Estándar", "~900 pal"], ["Largo", "~1200 pal"]].map(([l, hint]) => (<button key={l} onClick={() => setLongitud(l)} style={{ flex: 1, padding: "0.4rem 0.5rem", borderRadius: 8, border: longitud === l ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: longitud === l ? C.redLight : C.cardBg, color: longitud === l ? C.red : C.mid, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: longitud === l ? 700 : 500, textAlign: "center", lineHeight: 1.25 }}><div style={{ fontWeight: 700 }}>{l}</div><div style={{ fontSize: "0.62rem", opacity: 0.65 }}>{hint}</div></button>))}</div></div>
               <div><label style={labelStyle}>Intención de búsqueda</label><div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>{["Informativa", "Comparativa", "Transaccional", "Guía técnica"].map(it => (<button key={it} onClick={() => setIntencion(it)} style={{ padding: "0.4rem 0.75rem", borderRadius: 8, border: intencion === it ? `2px solid ${C.red}` : `1px solid ${C.border}`, background: intencion === it ? C.redLight : C.cardBg, color: intencion === it ? C.red : C.mid, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", fontWeight: intencion === it ? 700 : 500 }}>{it}</button>))}</div></div>
-              <div><label style={labelStyle}>URL de producto <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(opcional)</span></label><input value={urlProducto} onChange={e => setUrlProducto(e.target.value)} placeholder="https://ferrolan.es/producto/..." style={inputStyle} /></div>
               <div>
                 <label style={labelStyle}>Contexto / Idea concreta <span style={{ fontWeight: 400, textTransform: "none", fontSize: "0.78rem", color: C.muted }}>(recomendado)</span></label>
                 <textarea value={contexto} onChange={e => setContexto(e.target.value)} placeholder="Describe qué quieres que cubra el artículo: enfoque, puntos clave, productos relevantes, público objetivo, datos específicos..." rows={4} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
