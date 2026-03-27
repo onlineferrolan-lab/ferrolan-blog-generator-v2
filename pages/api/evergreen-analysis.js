@@ -157,31 +157,69 @@ export default async function handler(req, res) {
     const topicsCovered = [...new Set(kvArticulos.map((a) => a.categoria || "").filter(Boolean))];
 
     const EVERGREEN_TOPICS = [
-      "Cómo elegir azulejos",
-      "Guía de instalación de cerámica",
-      "Mantenimiento de parquet",
-      "Diferencias entre materiales",
-      "Colores y estilos para baños",
-      "Tendencias en cocinas",
-      "Presupuesto para reformas",
-      "Pasos para instalar suelo",
-      "Cuidado y limpieza de baldosas",
-      "Impermeabilización en baños",
-      "Suelos para espacios exteriores",
-      "Diseño de pisos pequeños",
-      "Materiales eco-friendly",
-      "Reparación de grietas",
+      // ── Baño ──
+      { topic: "Cómo elegir azulejos para el baño", key: "elegir-azulejos" },
+      { topic: "Colores y estilos para baños pequeños", key: "banos-pequenos" },
+      { topic: "Cómo impermeabilizar un baño", key: "impermeabilizar" },
+      { topic: "Diferencias entre mampara y cortina de ducha", key: "mampara-cortina" },
+      { topic: "Cómo elegir el plato de ducha", key: "plato-ducha" },
+      { topic: "Guía de griferías para baño", key: "griferia-bano" },
+      { topic: "Radiadores toallero: tipos y ventajas", key: "radiador-toallero" },
+      { topic: "Sanitarios suspendidos vs apoyados", key: "sanitarios-suspendidos" },
+      { topic: "Cómo limpiar azulejos y juntas", key: "limpiar-azulejos" },
+      { topic: "Iluminación para baños: guía completa", key: "iluminacion-bano" },
+      // ── Cocina ──
+      { topic: "Cómo elegir la encimera de cocina", key: "encimera-cocina" },
+      { topic: "Tipos de fregadero: guía de compra", key: "tipos-fregadero" },
+      { topic: "Azulejos para salpicadero de cocina", key: "salpicadero-cocina" },
+      { topic: "Suelos para cocina: qué material elegir", key: "suelo-cocina" },
+      { topic: "Cocinas abiertas: ventajas e inconvenientes", key: "cocinas-abiertas" },
+      { topic: "Cómo limpiar la encimera según el material", key: "limpiar-encimera" },
+      // ── Cerámica y porcelánico ──
+      { topic: "Diferencias entre cerámica y porcelánico", key: "ceramica-porcelanico" },
+      { topic: "Cómo instalar azulejos paso a paso", key: "instalar-azulejos" },
+      { topic: "Qué es el gres porcelánico", key: "gres-porcelanico" },
+      { topic: "Cómo elegir el formato de azulejo", key: "formato-azulejo" },
+      { topic: "Tipos de acabado cerámico: mate, brillo, satinado", key: "acabado-ceramico" },
+      { topic: "Rectificado en cerámica: qué es y para qué sirve", key: "rectificado-ceramica" },
+      { topic: "Errores comunes al colocar azulejos", key: "errores-colocar-azulejos" },
+      // ── Parquet y suelos de madera ──
+      { topic: "Tipos de parquet: macizo, laminado, vinílico", key: "tipos-parquet" },
+      { topic: "Cómo mantener el parquet en buen estado", key: "mantener-parquet" },
+      { topic: "Parquet flotante vs pegado: diferencias", key: "parquet-flotante" },
+      { topic: "Cómo limpiar el suelo de parquet", key: "limpiar-parquet" },
+      // ── Espacios exteriores ──
+      { topic: "Pavimentos antideslizantes para terraza", key: "antideslizante-terraza" },
+      { topic: "Cómo elegir el pavimento exterior", key: "pavimento-exterior" },
+      { topic: "Suelos para jardín: opciones y materiales", key: "suelo-jardin" },
+      { topic: "Cómo limpiar pavimentos exteriores", key: "limpiar-pavimento-exterior" },
+      // ── Materiales de construcción ──
+      { topic: "Tipos de mortero y cómo usarlos", key: "tipos-mortero" },
+      { topic: "Diferencias entre cemento cola: cuál elegir", key: "cemento-cola" },
+      { topic: "Cómo preparar la pared antes de alicatar", key: "preparar-pared-alicatar" },
+      { topic: "Impermeabilizante para terrazas: guía", key: "impermeabilizante-terraza" },
+      { topic: "Cómo hacer una regata en la pared", key: "regata-pared" },
+      // ── Presupuestos y planificación ──
+      { topic: "Cuánto cuesta reformar un baño completo", key: "coste-reformar-bano" },
+      { topic: "Cuánto cuesta reformar una cocina", key: "coste-reformar-cocina" },
+      { topic: "Presupuesto para alicatar una habitación", key: "presupuesto-alicatar" },
+      { topic: "Errores que encarecen la reforma", key: "errores-reforma" },
     ];
 
-    // Cruzar topics con URLs del blog real para identificar gaps reales
+    // Cruzar topics con URLs del blog real para identificar gaps reales.
+    // Consideramos cubierto si la key principal (con guiones) está en alguna URL del blog.
+    // Esto evita falsos positivos por coincidencias de palabras sueltas.
     const blogUrlsText = blogPages.map((p) => (p.url || "").toLowerCase()).join(" ");
-    const gaps = EVERGREEN_TOPICS.filter((topic) => {
-      const words = topic.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-      const cubierto =
-        kvArticulos.some((a) => a.titulo?.toLowerCase().includes(topic.toLowerCase())) ||
-        words.some((w) => blogUrlsText.includes(w));
-      return !cubierto;
-    }).slice(0, 4);
+    const gaps = EVERGREEN_TOPICS.filter(({ topic, key }) => {
+      const keyWords = key.split("-").filter(w => w.length > 3);
+      const cubiertoEnKV = kvArticulos.some((a) =>
+        keyWords.every(w => (a.titulo || "").toLowerCase().includes(w))
+      );
+      const cubiertoEnBlog = keyWords.length >= 2
+        ? keyWords.filter(w => blogUrlsText.includes(w)).length >= Math.ceil(keyWords.length * 0.6)
+        : blogUrlsText.includes(keyWords[0] || key);
+      return !cubiertoEnKV && !cubiertoEnBlog;
+    }).map(({ topic }) => topic).slice(0, 8);
 
     return res.status(200).json({
       pilares: todos,
