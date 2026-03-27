@@ -1589,30 +1589,40 @@ export default function Home() {
     setEnhancing(false);
   };
 
-  // Inserta un elemento CRO/Landing en la sección correcta del artículo
+  // Inserta un elemento CRO/Landing en la sección correcta del artículo.
+  // Siempre antes del bloque de metadatos (delimitado por \n---\n).
   const aplicarElementoEnArticulo = (element) => {
     if (!element?.text) return;
     const { text, placement, position } = element;
+
+    // Separar cuerpo del artículo del bloque meta (---) para no insertar dentro de los metadatos
+    const metaSep = "\n---\n";
+    const metaIdx = articulo.indexOf(metaSep);
+    const cuerpo  = metaIdx !== -1 ? articulo.slice(0, metaIdx) : articulo;
+    const metaBloque = metaIdx !== -1 ? articulo.slice(metaIdx) : "";
+
+    // Helper: reconstruir el artículo con el cuerpo modificado
+    const reconstruir = (nuevoCuerpo) => setArticulo(nuevoCuerpo + metaBloque);
 
     // Extraer nombre de sección de "H2: Nombre" o usar marcadores especiales
     const h2Match = placement?.match(/H2:\s*(.+)/i);
     const isIntro  = /^INTRO$/i.test(placement);
     const isCierre = /^CIERRE$/i.test(placement);
 
-    const lines = articulo.split("\n");
+    const lines = cuerpo.split("\n");
 
     if (isIntro) {
       // Insertar tras el H1
       const h1Idx = lines.findIndex(l => l.match(/^# /));
       const insertAt = h1Idx >= 0 ? h1Idx + 1 : 0;
       lines.splice(insertAt, 0, "", text, "");
-      setArticulo(lines.join("\n"));
+      reconstruir(lines.join("\n"));
       return;
     }
 
     if (isCierre || !h2Match) {
-      // Appender al final
-      setArticulo(articulo + "\n\n" + text);
+      // Insertar al final del cuerpo (antes del bloque meta)
+      reconstruir(cuerpo + "\n\n" + text);
       return;
     }
 
@@ -1634,8 +1644,8 @@ export default function Home() {
     }
 
     if (sectionIdx === -1) {
-      // Sección no encontrada → append al final
-      setArticulo(articulo + "\n\n" + text);
+      // Sección no encontrada → insertar al final del cuerpo
+      reconstruir(cuerpo + "\n\n" + text);
       return;
     }
 
@@ -1646,7 +1656,7 @@ export default function Home() {
     } else {
       lines.push("", text);
     }
-    setArticulo(lines.join("\n"));
+    reconstruir(lines.join("\n"));
   };
 
   const aplicarSeleccionados = (elements, selectedSet) => {
