@@ -6,13 +6,31 @@ Investigación SEO completa antes de escribir un artículo.
 `/research [tema]`
 
 ## Qué Hace
-1. Investiga keywords para el tema dentro del sector de Ferrolan
-2. Analiza los artículos top del SERP para la keyword principal
-3. Identifica gaps de contenido y oportunidades
-4. Desarrolla un ángulo único desde la perspectiva de Ferrolan
-5. Crea un brief de investigación completo
+1. Verifica que la keyword principal no está ya cubierta en el blog
+2. Investiga keywords para el tema dentro del sector de Ferrolan
+3. Analiza los artículos top del SERP para la keyword principal
+4. Identifica gaps de contenido y oportunidades
+5. Desarrolla un ángulo único desde la perspectiva de Ferrolan
+6. Crea un brief de investigación completo
 
 ## Proceso
+
+### Paso 0: Verificación de keyword (OBLIGATORIO — ejecutar primero)
+Antes de iniciar cualquier investigación, verifica que la keyword principal no está ya cubierta:
+
+1. Identifica la **keyword principal** del tema (la frase de búsqueda objetivo)
+2. Llama a `POST /api/check-keyword` con `{ "keyword": "[keyword principal]" }`
+3. Interpreta el resultado:
+   - **`available: true`** → Keyword libre. Continúa con el research normal.
+   - **`available: false`** → ⚠️ **ALERTA DE CANIBALIZACIÓN** — Hay artículos existentes:
+     - Lista los conflictos encontrados (título, fuente, tipo de coincidencia)
+     - Advierte al usuario: *"Ya existe contenido sobre esta keyword. Publicar otro artículo sobre el mismo tema podría causar canibalización SEO."*
+     - Sugiere opciones:
+       a) **Actualizar** el artículo existente en lugar de crear uno nuevo
+       b) **Enfocar en un ángulo más específico** (long-tail diferenciado)
+       c) **Continuar igualmente** si el ángulo es suficientemente distinto
+
+> Si no hay respuesta de la API (error de red, KV vacío, etc.), continúa el research con una nota de advertencia indicando que la verificación no pudo completarse.
 
 ### Investigación de Keywords
 - **Keyword principal**: Identificar la keyword objetivo

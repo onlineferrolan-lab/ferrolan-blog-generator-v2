@@ -109,6 +109,21 @@ async function getArticleHistory() {
   }
 }
 
+// ─── KV: get synced WordPress posts ─────────────────────────────────────────
+
+async function getWordPressPosts() {
+  try {
+    const ids = await kv.lrange("wp:posts:index", 0, -1);
+    if (!ids || ids.length === 0) return [];
+    const records = await Promise.all(ids.map((id) => kv.get(`wp:post:${id}`)));
+    return records
+      .filter(Boolean)
+      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+  } catch {
+    return [];
+  }
+}
+
 // ─── GSC: get current queries ───────────────────────────────────────────────
 
 async function getGSCQueries(auth) {
@@ -151,7 +166,7 @@ async function getGSCQueries(auth) {
 
 // ─── Claude: generate keywords ──────────────────────────────────────────────
 
-async function generateKeywords(categories, articles, gscQueries) {
+async function generateKeywords(categories, articles, gscQueries, wpPosts = []) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
@@ -168,13 +183,14 @@ async function generateKeywords(categories, articles, gscQueries) {
     })
     .join("\n");
 
-  // Build article summary
+  // Build article summary (KV articles + WordPress posts sincronizados)
+  const allArticleTitles = [
+    ...articles.slice(0, 50).map((a) => `- "${a.titulo || a.tema}" [${a.categoria || "blog"}]`),
+    ...wpPosts.slice(0, 100).map((p) => `- "${p.title}" [WordPress]`),
+  ];
   const artSummary =
-    articles.length > 0
-      ? articles
-          .slice(0, 50)
-          .map((a) => `- "${a.titulo || a.tema}" [${a.categoria}]`)
-          .join("\n")
+    allArticleTitles.length > 0
+      ? allArticleTitles.join("\n")
       : "No hay artículos publicados todavía.";
 
   // Build GSC summary (top queries)
@@ -389,11 +405,12 @@ export default async function handler(req, res) {
   try {
     const googleAuth = getGoogleAuth();
 
-    // Fetch all data in parallel
-    const [categories, articles, gscQueries] = await Promise.all([
+    // Fetch all data in parallel (incluye posts de WordPress sincronizados)
+    const [categories, articles, gscQueries, wpPosts] = await Promise.all([
       fetchPrestashopCategories(),
       getArticleHistory(),
       getGSCQueries(googleAuth),
+      getWordPressPosts(),
     ]);
 
     if (!categories || categories.length === 0) {
@@ -404,7 +421,7 @@ export default async function handler(req, res) {
     }
 
     // Generate keywords with Claude
-    const result = await generateKeywords(categories, articles, gscQueries);
+    const result = await generateKeywords(categories, articles, gscQueries, wpPosts);
 
     if (!result || !result.keywords || result.keywords.length === 0) {
       const detail = result?._apiError
