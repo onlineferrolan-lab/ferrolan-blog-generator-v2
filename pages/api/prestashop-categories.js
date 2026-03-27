@@ -6,7 +6,7 @@ import { kv } from "@vercel/kv";
 // por el filtro level_depth >= 2 — NO se propaga desde ellas.
 // Cachea el resultado 24h en Vercel KV.
 
-const CACHE_KEY = "prestashop:categories:v9";
+const CACHE_KEY = "prestashop:categories:v10";
 
 // Nombres de categorías a excluir (comparación normalizada, insensible a mayúsculas/acentos)
 const EXCLUIR_NOMBRES = ["busqueda avanzada", "calculadoras de materiales", "productos destacados"];
@@ -48,8 +48,9 @@ export default async function handler(req, res) {
   const headers = { Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64") };
 
   try {
-    // language=1 = español confirmado en ferrolan.es
-    const url = `${apiUrl}/categories?output_format=JSON&language=1&display=[id,name,id_parent,active,level_depth]&limit=500`;
+    // language=1 = español. Incluimos link_rewrite — con language=1 puede venir como string.
+    // Si no (null/vacío), usamos slugify(name) como fallback.
+    const url = `${apiUrl}/categories?output_format=JSON&language=1&display=[id,name,id_parent,active,level_depth,link_rewrite]&limit=500`;
     const resp = await fetch(url, { headers });
 
     if (!resp.ok) throw new Error(`Prestashop responded with ${resp.status}`);
@@ -86,7 +87,9 @@ export default async function handler(req, res) {
     const byId = {};
     validas.forEach((c) => {
       const name = typeof c.name === "string" ? c.name : "";
-      byId[c.id] = { ...c, children: [], _name: name, _slug: slugify(name) };
+      // Usar link_rewrite real si viene como string no vacío, si no derivar del nombre
+      const lr = typeof c.link_rewrite === "string" && c.link_rewrite.trim() ? c.link_rewrite.trim() : slugify(name);
+      byId[c.id] = { ...c, children: [], _name: name, _slug: lr };
     });
 
     const raices = [];
