@@ -364,8 +364,40 @@ function BlockRenderer({ block, C }) {
 
 // ─── Opportunities Panel (GSC + Prestashop unified) ─────────────────────────
 
-function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwData, kwLoading, onRefreshKW, onSelectTopic, C }) {
+function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwData, kwLoading, onRefreshKW, onSelectTopic, syncMeta, C }) {
   const [tab, setTab] = useState("oportunidades");
+  const [checkKw, setCheckKw] = useState("");
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkResult, setCheckResult] = useState(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
+
+  const handleCheckKeyword = async () => {
+    if (!checkKw.trim()) return;
+    setCheckLoading(true);
+    setCheckResult(null);
+    try {
+      const r = await fetch("/api/check-keyword", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keyword: checkKw.trim() }) });
+      const data = await r.json();
+      setCheckResult(data);
+    } catch {
+      setCheckResult({ error: "Error al conectar con la API" });
+    }
+    setCheckLoading(false);
+  };
+
+  const handleSync = async () => {
+    setSyncLoading(true);
+    setSyncResult(null);
+    try {
+      const r = await fetch("/api/sync-blog-posts", { method: "POST" });
+      const data = await r.json();
+      setSyncResult(data);
+    } catch {
+      setSyncResult({ error: "Error al sincronizar" });
+    }
+    setSyncLoading(false);
+  };
 
   const formatNum = (n) => n >= 1000 ? (n / 1000).toFixed(1) + "K" : String(n);
   const posColor = (pos) => pos <= 3 ? C.green : pos <= 7 ? C.orange : C.red;
@@ -381,6 +413,7 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
     { key: "sinCubrir",     label: "Sin cubrir (PS)",   desc: "Productos del catálogo sin artículo en el blog. Clic para generar." },
     { key: "sugeridas",     label: "Sugeridas (PS)",    desc: "Keywords long-tail generadas por IA cruzando catálogo y tendencias." },
     { key: "articulos",     label: "Artículos a revisar", desc: "Artículos con más impresiones. Revisar periódicamente." },
+    { key: "verificar",     label: "Verificar keyword", desc: "Comprueba si una keyword ya está cubierta en el blog antes de escribir." },
   ];
 
   const currentTab = TABS.find(t => t.key === tab);
@@ -553,6 +586,98 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
                 {item.url && <a href={`https://ferrolan.es${item.url}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.82rem", color: C.red, textDecoration: "none", marginTop: "0.3rem", display: "inline-block", fontWeight: 600 }}>Ver artículo →</a>}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── Tab: Verificar keyword ── */}
+        {tab === "verificar" && (
+          <div>
+            {/* ── Sync section ── */}
+            <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem 1rem", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark }}>Base de datos del blog</span>
+                {syncMeta?.lastSync && (
+                  <span style={{ fontSize: "0.72rem", color: C.muted }}>
+                    {syncMeta.count} posts · {new Date(syncMeta.lastSync).toLocaleDateString("es-ES")}
+                  </span>
+                )}
+                {syncResult?.synced !== undefined && (
+                  <span style={{ fontSize: "0.72rem", color: C.green, fontWeight: 700 }}>
+                    ✓ {syncResult.synced} posts sincronizados
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "0.78rem", color: C.muted, marginBottom: "0.65rem", lineHeight: 1.4 }}>
+                Sincroniza todos los posts publicados de WordPress para que el verificador conozca el blog completo.
+                {!syncMeta?.lastSync && <span style={{ color: C.orange, fontWeight: 600 }}> Sin sincronizar todavía.</span>}
+              </div>
+              <button onClick={handleSync} disabled={syncLoading}
+                style={{ background: syncLoading ? C.muted : C.dark, color: "#FFF", border: "none", borderRadius: 7, padding: "0.5rem 1rem", fontSize: "0.8rem", cursor: syncLoading ? "default" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", transition: "background 0.15s" }}>
+                {syncLoading ? "Sincronizando..." : "↻ Sincronizar blog de WordPress"}
+              </button>
+              {syncResult?.error && <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: C.red }}>⚠ {syncResult.error}</div>}
+            </div>
+
+            {/* ── Keyword check input ── */}
+            <div style={{ marginBottom: "0.85rem" }}>
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: C.dark, marginBottom: "0.5rem" }}>Verificar disponibilidad de keyword</div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input
+                  type="text"
+                  value={checkKw}
+                  onChange={e => setCheckKw(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleCheckKeyword()}
+                  placeholder="ej: azulejos para baño pequeño"
+                  style={{ flex: 1, background: C.inputBg, border: `1px solid ${C.inputBorder}`, borderRadius: 8, padding: "0.55rem 0.85rem", fontSize: "0.88rem", color: C.dark, outline: "none", fontFamily: "inherit" }}
+                />
+                <button onClick={handleCheckKeyword} disabled={checkLoading || !checkKw.trim()}
+                  style={{ background: checkLoading ? C.muted : C.red, color: "#FFF", border: "none", borderRadius: 8, padding: "0.55rem 1.1rem", fontSize: "0.85rem", cursor: (checkLoading || !checkKw.trim()) ? "default" : "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", transition: "background 0.15s" }}>
+                  {checkLoading ? "..." : "Verificar"}
+                </button>
+              </div>
+            </div>
+
+            {/* ── Result ── */}
+            {checkResult && !checkResult.error && (
+              <div>
+                {checkResult.available ? (
+                  <div style={{ background: C.greenLight, border: `1px solid ${C.greenBorder}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.green, marginBottom: "0.25rem" }}>✓ Keyword disponible</div>
+                    <div style={{ fontSize: "0.82rem", color: C.mid }}>No se ha encontrado ningún artículo publicado sobre <strong>"{checkResult.keyword}"</strong>. Puedes proceder a escribir.</div>
+                    <button onClick={() => onSelectTopic({ tema: `Guía completa de ${checkResult.keyword}`, keywords: checkResult.keyword })}
+                      style={{ marginTop: "0.65rem", background: C.green, color: "#FFF", border: "none", borderRadius: 7, padding: "0.45rem 1rem", fontSize: "0.8rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      → Usar esta keyword
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "0.85rem 1rem" }}>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: C.red, marginBottom: "0.35rem" }}>⚠ Keyword ya cubierta — riesgo de canibalización</div>
+                    <div style={{ fontSize: "0.82rem", color: C.mid, marginBottom: "0.65rem" }}>Se encontraron {checkResult.conflicts.length} artículo(s) relacionados con <strong>"{checkResult.keyword}"</strong>:</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                      {checkResult.conflicts.map((c, i) => (
+                        <div key={i} style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0.65rem 0.85rem" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: C.dark, lineHeight: 1.35 }}>{c.title}</span>
+                            <div style={{ display: "flex", gap: "0.3rem", flexShrink: 0 }}>
+                              <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.4rem", borderRadius: 5, background: c.source === "wordpress" ? "#EFF6FF" : C.redLight, color: c.source === "wordpress" ? C.blue : C.red, border: `1px solid ${c.source === "wordpress" ? C.blueBorder : C.redBorder}` }}>{c.source === "wordpress" ? "WP" : "KV"}</span>
+                              <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.4rem", borderRadius: 5, background: C.orangeLight, color: C.orange }}>{c.matchType}</span>
+                            </div>
+                          </div>
+                          {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.78rem", color: C.red, textDecoration: "none", fontWeight: 600, marginTop: "0.25rem", display: "inline-block" }}>Ver artículo →</a>}
+                          {c.date && <span style={{ fontSize: "0.72rem", color: C.muted, marginLeft: c.url ? "0.75rem" : 0 }}>{c.date}</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: C.mid, lineHeight: 1.5 }}>
+                      Opciones: <strong>actualizar el artículo existente</strong>, o bien buscar un enfoque más específico (long-tail diferenciado) para evitar la canibalización.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {checkResult?.error && (
+              <div style={{ background: C.redLight, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "0.75rem", fontSize: "0.85rem", color: C.red }}>⚠ {checkResult.error}</div>
+            )}
           </div>
         )}
 
@@ -1291,6 +1416,9 @@ export default function Home() {
   const [kwData, setKwData] = useState(null);
   const [kwLoading, setKwLoading] = useState(false);
 
+  // Blog sync status (WordPress → KV)
+  const [syncMeta, setSyncMeta] = useState(null);
+
   // Categorías Prestashop (desplegable en formulario)
   const [psCategories, setPsCategories] = useState([]);
   const [psCategoria, setPsCategoria] = useState(""); // "Nombre|https://url"
@@ -1325,6 +1453,15 @@ export default function Home() {
     try { const res = await fetch("/api/schedule-article"); const data = await res.json(); if (data.nextDate) setNextSlot(data); } catch { /* silent */ }
   }, []);
 
+  // Fetch sync status (WordPress blog → KV)
+  const fetchSyncMeta = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync-blog-posts");
+      const data = await res.json();
+      if (data.synced) setSyncMeta(data);
+    } catch { /* silent */ }
+  }, []);
+
   // Fetch keywords data (Prestashop × KV × GSC)
   const fetchKeywords = useCallback(async (forceRefresh = false) => {
     setKwLoading(true);
@@ -1356,7 +1493,7 @@ export default function Home() {
     } catch (e) { console.warn("fetchPsCategories failed:", e); }
   }, []);
 
-  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories]);
+  useEffect(() => { fetchGSC(); fetchArticles(); fetchScheduled(); fetchNextSlot(); fetchEvergreen(); fetchPsCategories(); fetchSyncMeta(); }, [fetchGSC, fetchArticles, fetchScheduled, fetchNextSlot, fetchEvergreen, fetchPsCategories, fetchSyncMeta]);
 
   const refreshExamples = () => setEjemplos(generateExamplesFromGSC(gscData));
 
@@ -1777,6 +1914,18 @@ export default function Home() {
 
                 {researchData && researchExpanded && (
                   <div style={{ background: C.light, border: `1px solid ${C.border}`, borderRadius: 10, padding: "0.85rem", fontSize: "0.85rem" }}>
+                    {/* Keyword check banner */}
+                    {researchData.keywordCheck && !researchData.keywordCheck.available && researchData.keywordCheck.conflicts?.length > 0 && (
+                      <div style={{ marginBottom: "0.75rem", padding: "0.65rem 0.85rem", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: "0.82rem" }}>
+                        <div style={{ fontWeight: 700, color: C.red, marginBottom: "0.3rem" }}>⚠ Keyword ya cubierta — posible canibalización</div>
+                        {researchData.keywordCheck.conflicts.slice(0, 3).map((c, i) => (
+                          <div key={i} style={{ color: C.mid, lineHeight: 1.4 }}>
+                            · <strong>{c.title}</strong> <span style={{ fontSize: "0.72rem", color: C.muted }}>({c.source} · {c.matchType})</span>
+                            {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "0.4rem", color: C.red, fontWeight: 600, textDecoration: "none" }}>→</a>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {/* Brief summary */}
                     {researchData.briefSummary && (
                       <div style={{ marginBottom: "0.7rem", padding: "0.5rem 0.7rem", background: C.blueLight, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: "0.82rem", lineHeight: 1.5, fontWeight: 500 }}>
@@ -1902,7 +2051,7 @@ export default function Home() {
           <OpportunitiesPanel
             gscData={gscData} gscLoading={gscLoading} gscError={gscError} onRefreshGSC={fetchGSC}
             kwData={kwData} kwLoading={kwLoading} onRefreshKW={() => fetchKeywords(true)}
-            onSelectTopic={handleSelectTopic} C={C}
+            onSelectTopic={handleSelectTopic} syncMeta={syncMeta} C={C}
           />
         </div>
 
