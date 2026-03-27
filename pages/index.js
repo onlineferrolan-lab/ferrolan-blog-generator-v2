@@ -1589,74 +1589,132 @@ export default function Home() {
     setEnhancing(false);
   };
 
-  // Inserta un elemento CRO/Landing en la sección correcta del artículo.
-  // Siempre antes del bloque de metadatos (delimitado por \n---\n).
+  // Inserta un elemento CRO/Landing en la posición semánticamente correcta.
+  // Lógica de posicionamiento (en orden de prioridad):
+  //   1. INTRO          → tras el H1
+  //   2. CIERRE         → en la ÚLTIMA sección H2 (al fin)
+  //   3. H2: <nombre>   → sección que mejor encaje (fuzzy matching con solapamiento de palabras)
+  //   4. Fallback       → según tipo: objección → 2ª sección; CTA/prueba → última sección
+  // Siempre antes del bloque de metadatos SEO (delimitado por \n---\n).
   const aplicarElementoEnArticulo = (element) => {
     if (!element?.text) return;
-    const { text, placement, position } = element;
+    const { text, placement, position, type } = element;
 
-    // Separar cuerpo del artículo del bloque meta (---) para no insertar dentro de los metadatos
-    const metaSep = "\n---\n";
-    const metaIdx = articulo.indexOf(metaSep);
-    const cuerpo  = metaIdx !== -1 ? articulo.slice(0, metaIdx) : articulo;
+    // ── Separar cuerpo del bloque meta ─────────────────────────────────────
+    const metaIdx = articulo.indexOf("\n---\n");
+    const cuerpo     = metaIdx !== -1 ? articulo.slice(0, metaIdx) : articulo;
     const metaBloque = metaIdx !== -1 ? articulo.slice(metaIdx) : "";
-
-    // Helper: reconstruir el artículo con el cuerpo modificado
     const reconstruir = (nuevoCuerpo) => setArticulo(nuevoCuerpo + metaBloque);
-
-    // Extraer nombre de sección de "H2: Nombre" o usar marcadores especiales
-    const h2Match = placement?.match(/H2:\s*(.+)/i);
-    const isIntro  = /^INTRO$/i.test(placement);
-    const isCierre = /^CIERRE$/i.test(placement);
 
     const lines = cuerpo.split("\n");
 
+    // ── Índice de todas las secciones H2 ───────────────────────────────────
+    const h2Indices = lines.reduce((acc, l, i) => { if (/^## /.test(l)) acc.push(i); return acc; }, []);
+
+    // Helper: inserta text en una sección (sectionIdx = línea del H2)
+    const insertarEnSeccion = (sectIdx, nextSectIdx, pos) => {
+      if (pos === "inicio") {
+        lines.splice(sectIdx + 1, 0, "", text, "");
+      } else {
+        // fin: justo antes de la siguiente sección (o al final del cuerpo)
+        if (nextSectIdx !== -1) {
+          lines.splice(nextSectIdx, 0, text, "");
+        } else {
+          lines.push("", text);
+        }
+      }
+      reconstruir(lines.join("\n"));
+    };
+
+    // ── 1. INTRO: tras el H1 ───────────────────────────────────────────────
+    const isIntro  = /^INTRO$/i.test(placement);
     if (isIntro) {
-      // Insertar tras el H1
-      const h1Idx = lines.findIndex(l => l.match(/^# /));
-      const insertAt = h1Idx >= 0 ? h1Idx + 1 : 0;
-      lines.splice(insertAt, 0, "", text, "");
+      const h1Idx = lines.findIndex(l => /^# /.test(l));
+      lines.splice(h1Idx >= 0 ? h1Idx + 1 : 0, 0, "", text, "");
       reconstruir(lines.join("\n"));
       return;
     }
 
-    if (isCierre || !h2Match) {
-      // Insertar al final del cuerpo (antes del bloque meta)
-      reconstruir(cuerpo + "\n\n" + text);
+    // ── 2. CIERRE: última sección H2, al fin ───────────────────────────────
+    const isCierre = /^CIERRE$/i.test(placement);
+    if (isCierre) {
+      if (h2Indices.length > 0) {
+        const lastIdx = h2Indices[h2Indices.length - 1];
+        insertarEnSeccion(lastIdx, -1, "fin");
+      } else {
+        lines.push("", text);
+        reconstruir(lines.join("\n"));
+      }
       return;
     }
 
-    const targetSection = h2Match[1].trim().toLowerCase();
-    let sectionIdx = -1;
-    let nextH2Idx  = -1;
+    // ── 3. H2 específico: fuzzy matching ───────────────────────────────────
+    const h2Match = placement?.match(/H2:\s*(.+)/i);
+    if (h2Match) {
+      const targetSection = h2Match[1].trim().toLowerCase();
+      // Palabras significativas del target (> 3 caracteres)
+      const targetWords = targetSection.split(/\s+/).filter(w => w.length > 3);
 
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].match(/^## /)) {
-        const h2text = lines[i].replace(/^## /, "").toLowerCase();
+      let bestIdx = -1;
+      let bestScore = 0;
+      let bestNextIdx = -1;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (!/^## /.test(lines[i])) continue;
+        const h2text = lines[i].replace(/^## /, "").trim().toLowerCase();
+
+        // Puntuación: containment exacto pesa más; solapamiento de palabras
+        let score = 0;
         if (h2text.includes(targetSection) || targetSection.includes(h2text)) {
-          sectionIdx = i;
+          score = 2;
+        } else if (targetWords.length > 0) {
+          const h2Words = h2text.split(/\s+/);
+          const matched = targetWords.filter(w => h2Words.some(hw => hw.includes(w) || w.includes(hw))).length;
+          score = matched / targetWords.length; // 0–1
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestIdx = i;
+          bestNextIdx = -1;
           for (let j = i + 1; j < lines.length; j++) {
-            if (lines[j].match(/^## /)) { nextH2Idx = j; break; }
+            if (/^## /.test(lines[j])) { bestNextIdx = j; break; }
           }
-          break;
         }
       }
+
+      if (bestScore >= 0.5) {
+        insertarEnSeccion(bestIdx, bestNextIdx, position || "fin");
+        return;
+      }
+      // Si no hay match suficiente, cae al fallback por tipo
     }
 
-    if (sectionIdx === -1) {
-      // Sección no encontrada → insertar al final del cuerpo
-      reconstruir(cuerpo + "\n\n" + text);
+    // ── 4. Fallback por tipo del elemento ──────────────────────────────────
+    if (h2Indices.length === 0) {
+      lines.push("", text);
+      reconstruir(lines.join("\n"));
       return;
     }
 
-    if (position === "inicio") {
-      lines.splice(sectionIdx + 1, 0, "", text, "");
-    } else if (nextH2Idx !== -1) {
-      lines.splice(nextH2Idx, 0, text, "");
+    // Tipos que van al principio del artículo (tras intro/1ª sección)
+    const isEarlyType = /^(objecion|objecci|especificidad|reciprocidad)$/i.test(type || "");
+    // Tipos que van al final (antes del cierre)
+    const isLateType  = /^(cta|prueba_social|urgencia_etica|escasez_etica|compromiso)$/i.test(type || "");
+
+    let targetIdx, nextIdx;
+
+    if (isEarlyType && h2Indices.length >= 2) {
+      // Segunda sección (después de la intro/primera H2)
+      targetIdx = h2Indices[1];
+      nextIdx   = h2Indices[2] ?? -1;
     } else {
-      lines.push("", text);
+      // Última sección (CTA, prueba social, cierre, o tipo desconocido)
+      targetIdx = h2Indices[h2Indices.length - 1];
+      nextIdx   = -1;
     }
-    reconstruir(lines.join("\n"));
+
+    insertarEnSeccion(targetIdx, nextIdx, position || "fin");
   };
 
   const aplicarSeleccionados = (elements, selectedSet) => {
