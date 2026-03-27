@@ -1,14 +1,14 @@
 import { kv } from "@vercel/kv";
 
 // ─── Prestashop Categories API ───────────────────────────────────────────────
-// Excluye la categoría 16 y todos sus descendientes, más las meta-categorías
-// internas de Prestashop (raíz, inicio, etc.).
+// Solo excluye categoría 16 (y descendientes) + meta-cats raíz (id 1 y 2).
 // Cachea el resultado 24h en Vercel KV.
 
-const EXCLUIR_RAIZ = new Set([1, 2, 16, 9498, 3554, 8186, 11699]);
-const CACHE_KEY = "prestashop:categories:v6";
+// SOLO excluimos lo que el usuario pidió: cat 16 + las dos meta-cats de PS (root + inicio)
+const EXCLUIR_RAIZ = new Set([1, 2, 16]);
+const CACHE_KEY = "prestashop:categories:v7";
 
-// Deriva el slug de URL desde el nombre de categoría (igual que Prestashop)
+// Deriva el slug de URL desde el nombre de categoría
 function slugify(name) {
   return (name || "")
     .toLowerCase()
@@ -43,15 +43,17 @@ export default async function handler(req, res) {
 
   try {
     // Paso 1: descubrir el ID del idioma español (iso_code = "es")
-    let langId = 1; // fallback
+    let langId = 1;
+    let langDebug = [];
     try {
       const langResp = await fetch(`${apiUrl}/languages?output_format=JSON&display=[id,iso_code]&limit=20`, { headers });
       if (langResp.ok) {
         const langData = await langResp.json();
+        langDebug = (langData.languages || []).map(l => ({ id: l.id, iso: l.iso_code }));
         const esLang = (langData.languages || []).find(l => l.iso_code === "es");
         if (esLang) langId = Number(esLang.id);
       }
-    } catch { /* usar langId=1 como fallback */ }
+    } catch { /* usar langId=1 */ }
 
     // Paso 2: categorías con el idioma correcto → name viene como string plano
     const url = `${apiUrl}/categories?output_format=JSON&language=${langId}&display=[id,name,id_parent,active,level_depth]&limit=500`;
@@ -62,6 +64,10 @@ export default async function handler(req, res) {
     }
 
     const json = await resp.json();
+
+    // Debug: ver el primer objeto crudo tal como viene de PS
+    const _rawSample = json.categories ? JSON.stringify(json.categories[0]) : "no categories";
+
     const all = (json.categories || []).filter((c) => c.active === "1");
 
     // Construir set de IDs excluidos propagando hacia abajo en el árbol
@@ -82,7 +88,7 @@ export default async function handler(req, res) {
       (c) => Number(c.level_depth) >= 2 && !excluidos.has(Number(c.id))
     );
 
-    // Construir árbol (dos niveles visibles: padre → hijos directos)
+    // Construir árbol
     const byId = {};
     validas.forEach((c) => {
       const name = typeof c.name === "string" ? c.name : "";
@@ -110,7 +116,7 @@ export default async function handler(req, res) {
 
     const categories = sortByName(raices.map(toNode));
 
-    const result = { categories, _langId: langId, _total: all.length, _validas: validas.length };
+    const result = { categories, _langId: langId, _langDebug: langDebug, _total: all.length, _validas: validas.length, _rawSample };
 
     try {
       await kv.set(CACHE_KEY, result, { ex: 86400 });
