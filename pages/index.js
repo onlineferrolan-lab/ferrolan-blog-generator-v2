@@ -94,6 +94,9 @@ export default function Home() {
   const [enhanceResult, setEnhanceResult] = useState(null);
   const [fixingKeywords, setFixingKeywords] = useState(false);
 
+  // ── Coste de la última generación (tokens + USD estimado) ──
+  const [genUsage, setGenUsage] = useState(null);
+
   // ── Datos de servidor (SWR) ──
   const { gscData, gscLoading, gscError, refreshGSC } = useGSC();
   const { savedArticles, refreshArticles } = useArticles();
@@ -139,7 +142,7 @@ export default function Home() {
   // En cuanto llega el primer fragmento se salta a la vista de artículo.
   const generarArticulo = async () => {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
-    setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null); setEnhanceResult(null);
+    setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null); setEnhanceResult(null); setGenUsage(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         tema, categoria, keywords, tono, contexto, publico, longitud, intencion, provider, stream: true,
@@ -181,6 +184,8 @@ export default function Home() {
               firstChunk = false;
             }
             setArticulo(acc);
+          } else if (payload.done) {
+            if (payload.usage) setGenUsage({ ...payload.usage, cost: payload.cost });
           } else if (payload.error) {
             streamError = payload.error;
           }
@@ -651,6 +656,13 @@ export default function Home() {
             <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark, fontFamily: "'Oswald', sans-serif" }}>{tema}</span>
             {categoria && <span style={{ fontSize: "0.72rem", fontWeight: 700, color: C.red, background: `${C.red}12`, padding: "0.15rem 0.5rem", borderRadius: 5 }}>{categoria}</span>}
             {tono && <span style={{ fontSize: "0.72rem", fontWeight: 600, color: C.muted, background: C.light, padding: "0.15rem 0.5rem", borderRadius: 5, border: `1px solid ${C.border}` }}>{tono}</span>}
+            {genUsage && (
+              <span title={`Modelo: ${genUsage.model}\nInput: ${genUsage.inputTokens} tokens (caché: ${genUsage.cacheReadTokens || 0} leídos, ${genUsage.cacheWriteTokens || 0} escritos)\nOutput: ${genUsage.outputTokens} tokens`}
+                style={{ fontSize: "0.72rem", fontWeight: 700, color: C.green, background: `${C.green}15`, padding: "0.15rem 0.5rem", borderRadius: 5, border: `1px solid ${C.green}30`, cursor: "help" }}>
+                {genUsage.cost != null ? `≈ $${genUsage.cost.toFixed(3)}` : `${genUsage.outputTokens} tok`}
+                {(genUsage.cacheReadTokens || 0) > 0 ? " · caché ✓" : ""}
+              </span>
+            )}
           </div>
         </div>
 

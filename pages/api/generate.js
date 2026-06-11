@@ -1,4 +1,5 @@
 import { callAI, callAIStream } from "../../lib/ai-client";
+import { estimateCost } from "../../lib/ai-cost";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
 import { getArticlesMeta, saveArticleRecord } from "../../lib/article-store";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
@@ -196,10 +197,15 @@ Genera el artículo completo siguiendo todas las instrucciones de estilo editori
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
 
     try {
-      for await (const delta of callAIStream({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096 })) {
+      let usage = null;
+      for await (const delta of callAIStream({
+        provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096,
+        onUsage: (u) => { usage = u; },
+      })) {
         send({ delta });
       }
-      send({ done: true, historialCount: history.length });
+      const cost = usage ? estimateCost(usage) : null;
+      send({ done: true, historialCount: history.length, usage, cost });
     } catch (err) {
       console.error("AI generation error (stream):", err);
       send({ error: "Error al generar el artículo. Inténtalo de nuevo." });
