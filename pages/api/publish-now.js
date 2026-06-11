@@ -1,20 +1,29 @@
 import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
 import { markdownToHtml } from "../../lib/markdown-to-html";
+import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Publish Now API ────────────────────────────────────────────────────────
 // Sube un artículo a WordPress como BORRADOR para revisión final.
+
+export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, articulo, wpCategoryId } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "Faltan datos: tema y artículo son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, articulo, wpCategoryId } = req.body;
 
   const wpUrl = process.env.WORDPRESS_URL;
   const wpUser = process.env.WORDPRESS_USER;
@@ -116,7 +125,8 @@ export default async function handler(req, res) {
       status: "draft",
     });
   } catch (err) {
+    // El detalle (respuesta cruda de WordPress incluida) queda en logs
     console.error("Publish error:", err);
-    return res.status(500).json({ error: "Error al subir borrador: " + err.message });
+    return res.status(500).json({ error: "Error al subir el borrador a WordPress. Revisa los logs del servidor." });
   }
 }

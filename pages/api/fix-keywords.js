@@ -1,17 +1,29 @@
 import { callAI } from "../../lib/ai-client";
+import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Fix Keywords API ─────────────────────────────────────────────────────────
 // Recibe el artículo + el análisis de keywords del agente y reescribe el
 // artículo corrigiendo los problemas de ubicación y densidad detectados.
 // Preserva la estructura, el tono, el contenido y el bloque meta (---).
 
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { max: MAX.tema },
+    keywords: { max: MAX.keywords },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
   const { articulo, tema, keywords, keywordAnalysis, provider = "anthropic" } = req.body;
 
-  if (!articulo || !keywordAnalysis) {
-    return res.status(400).json({ error: "Artículo y análisis de keywords son obligatorios." });
+  if (!keywordAnalysis || typeof keywordAnalysis !== "object") {
+    return res.status(400).json({ error: "El análisis de keywords es obligatorio." });
   }
 
   // Separar cuerpo del bloque meta para no tocarlo

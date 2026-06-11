@@ -1,6 +1,9 @@
 import { callAI } from "../../lib/ai-client";
 import { kv } from "@vercel/kv";
 import { normalizeKeyword, normalizeSlug, matchType } from "../../lib/keyword-utils";
+import { validateBody, MAX } from "../../lib/validate";
+
+export const config = { maxDuration: 60 };
 
 // ─── Research API ─────────────────────────────────────────────────────────────
 // Analiza el panorama competitivo para un tema dado usando Claude.
@@ -102,11 +105,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, contexto, provider = "anthropic" } = req.body;
-
-  if (!tema) {
-    return res.status(400).json({ error: "El tema es obligatorio para investigar." });
+  const validationError = validateBody(req.body, {
+    tema: { required: true, max: MAX.tema },
+    categoria: { max: MAX.corto },
+    keywords: { max: MAX.keywords },
+    contexto: { max: MAX.contexto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, contexto, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
@@ -138,13 +147,8 @@ Devuelve el análisis competitivo en formato JSON.`;
 
     return res.status(200).json({ ...data, keywordCheck });
   } catch (err) {
+    // El detalle queda en logs; al cliente solo un mensaje genérico
     console.error("Research API error:", err);
-
-    if (err instanceof SyntaxError) {
-      return res.status(500).json({ error: "Error al procesar la investigación. Inténtalo de nuevo." });
-    }
-
-    const msg = err?.message || err?.error?.message || "Error desconocido";
-    return res.status(500).json({ error: `Error al investigar: ${msg}` });
+    return res.status(500).json({ error: "Error al investigar el tema. Inténtalo de nuevo." });
   }
 }

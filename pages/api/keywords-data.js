@@ -3,6 +3,9 @@ import { kv } from "@vercel/kv";
 import { google } from "googleapis";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 
+// Prestashop + GSC + WordPress + análisis con Claude en una sola request
+export const config = { maxDuration: 60 };
+
 // Nivel de coincidencia para "ya cubierto": exacta/contenida + solapamiento ≥60%.
 const COVERAGE_LEVEL = "balanced";
 

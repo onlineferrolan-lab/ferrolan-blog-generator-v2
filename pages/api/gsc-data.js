@@ -7,6 +7,8 @@
 import { google } from "googleapis";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 
+export const config = { maxDuration: 60 };
+
 // Nivel de coincidencia para considerar un tema "ya cubierto":
 // "balanced" = exacta/contenida + solapamiento alto (≥60%).
 const COVERAGE_LEVEL = "balanced";

@@ -2,6 +2,10 @@ import { kv } from "@vercel/kv";
 import { callAI } from "../../lib/ai-client";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
+import { validateBody, MAX } from "../../lib/validate";
+
+// La generación con el modelo principal puede tardar más de un minuto
+export const config = { maxDuration: 60 };
 
 // ─── Helpers KV ─────────────────────────────────────────────────────────────
 
@@ -121,11 +125,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlCategoriaPrestashop, nombreCategoriaPrestashop, provider = "anthropic" } = req.body;
-
-  if (!tema || !categoria) {
-    return res.status(400).json({ error: "Tema y categoría son obligatorios" });
+  const validationError = validateBody(req.body, {
+    tema: { required: true, max: MAX.tema },
+    categoria: { required: true, max: MAX.corto },
+    keywords: { max: MAX.keywords },
+    tono: { max: MAX.corto },
+    contexto: { max: MAX.contexto },
+    publico: { max: MAX.corto },
+    longitud: { max: MAX.corto },
+    intencion: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlCategoriaPrestashop, nombreCategoriaPrestashop, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
@@ -168,7 +182,9 @@ IMPORTANTE: Usa esta investigación para crear un artículo que cubra los gaps i
 Genera el artículo completo siguiendo todas las instrucciones de estilo editorial. Recuerda consultar el historial de artículos existentes para asegurarte de que el enfoque es nuevo y diferenciado.`;
 
   try {
-    const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 2048 });
+    // 4096 tokens: un artículo "Largo" (~1200 palabras) + bloque meta ronda los
+    // 2000-2400 tokens en castellano; con 2048 se truncaba a media frase.
+    const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096 });
 
     return res.status(200).json({
       articulo: text,

@@ -1,4 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { validateBody, MAX } from "../../lib/validate";
+
+// Generación de prompts + 4 imágenes: es la ruta más lenta de la app
+export const config = { maxDuration: 60 };
 
 // ─── Genera los prompts de imagen usando Claude como director de fotografía ──
 
@@ -121,11 +125,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, articleText } = req.body;
-
-  if (!tema || !categoria || !articleText) {
-    return res.status(400).json({ error: "Faltan parámetros" });
+  const validationError = validateBody(req.body, {
+    tema: { required: true, max: MAX.tema },
+    categoria: { required: true, max: MAX.corto },
+    articleText: { required: true, max: MAX.articulo },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, articleText } = req.body;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada" });
@@ -158,7 +167,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ imagenes });
   } catch (err) {
+    // El detalle (respuesta de OpenAI incluida) queda en logs, no en el cliente
     console.error("Image generation error:", err);
-    return res.status(500).json({ error: err.message || "Error generando imágenes" });
+    return res.status(500).json({ error: "Error generando las imágenes. Inténtalo de nuevo." });
   }
 }

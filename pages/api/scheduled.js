@@ -40,6 +40,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ scheduled, total: scheduled.length });
   } catch (err) {
     console.error("Scheduled list error:", err);
-    return res.status(200).json({ scheduled: [], total: 0, error: err.message });
+    return res.status(200).json({ scheduled: [], total: 0, error: "No se pudieron cargar los programados" });
   }
 }

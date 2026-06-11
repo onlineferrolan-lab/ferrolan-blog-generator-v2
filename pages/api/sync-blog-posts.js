@@ -9,6 +9,8 @@ import { kv } from "@vercel/kv";
 //   wp:post:{id}          → JSON con metadatos del post
 //   wp:sync:meta          → JSON con lastSync, count, totalPages
 
+export const config = { maxDuration: 60 };
+
 const WP_POSTS_INDEX = "wp:posts:index";
 const WP_SYNC_META = "wp:sync:meta";
 
@@ -126,8 +128,8 @@ export default async function handler(req, res) {
         lastSync: meta.lastSync,
       });
     } catch (err) {
-      console.error("[sync-blog-posts] Error:", err.message);
-      return res.status(500).json({ error: err.message });
+      console.error("[sync-blog-posts] Error:", err);
+      return res.status(500).json({ error: "Error sincronizando los posts de WordPress. Revisa los logs del servidor." });
     }
   }
 

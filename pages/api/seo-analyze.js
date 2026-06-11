@@ -1,7 +1,10 @@
 import { callAI } from "../../lib/ai-client";
+import { validateBody, MAX } from "../../lib/validate";
 
 // ─── SEO Analyze API ──────────────────────────────────────────────────────────
 // Analiza un artículo generado y devuelve un informe SEO estructurado.
+
+export const config = { maxDuration: 60 };
 
 const SEO_SYSTEM_PROMPT = `Eres un especialista senior en SEO para contenido de construcción, reforma del hogar, cerámica, baño, cocina, parquet, ferretería y jardinería en España.
 
@@ -49,11 +52,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
-
-  if (!articulo) {
-    return res.status(400).json({ error: "El artículo es obligatorio para analizar." });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { max: MAX.tema },
+    keywords: { max: MAX.keywords },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });

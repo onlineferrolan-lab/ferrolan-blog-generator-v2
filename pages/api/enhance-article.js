@@ -2,6 +2,10 @@ import { callAI } from "../../lib/ai-client";
 import fs from "fs";
 import path from "path";
 import { loadAgentContext } from "../../lib/context-loader";
+import { validateBody, MAX } from "../../lib/validate";
+
+// 5 agentes en paralelo sobre el artículo completo
+export const config = { maxDuration: 60 };
 
 // ─── Agent definition loader ─────────────────────────────────────────────────
 
@@ -296,11 +300,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords, categoria, provider = "anthropic" } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "articulo y tema son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { articulo, tema, keywords, categoria, provider = "anthropic" } = req.body;
 
   const ctx = loadAgentContext();
 

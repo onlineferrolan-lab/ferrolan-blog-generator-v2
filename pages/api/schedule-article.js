@@ -2,6 +2,9 @@ import { kv } from "@vercel/kv";
 import { google } from "googleapis";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
 import { markdownToHtml } from "../../lib/markdown-to-html";
+import { validateBody, MAX } from "../../lib/validate";
+
+export const config = { maxDuration: 60 };
 
 // ─── Schedule Article API ──────────────────────────────────────────────────
 // 1. Calcula el próximo martes o jueves disponible
@@ -129,7 +132,8 @@ export default async function handler(req, res) {
         dayName: nextDate.getDay() === 2 ? "Martes" : "Jueves",
       });
     } catch (err) {
-      return res.status(200).json({ nextDate: null, error: err.message });
+      console.error("Next slot error:", err);
+      return res.status(200).json({ nextDate: null, error: "No se pudo calcular el próximo hueco disponible" });
     }
   }
 
@@ -137,11 +141,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, articulo } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "Faltan datos: tema y artículo son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+    tono: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, articulo } = req.body;
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
   if (!spreadsheetId) {
@@ -227,7 +238,8 @@ export default async function handler(req, res) {
       blogUrl,
     });
   } catch (err) {
+    // El detalle (Google Sheets API incluida) queda en logs
     console.error("Schedule error:", err);
-    return res.status(500).json({ error: "Error al programar: " + err.message });
+    return res.status(500).json({ error: "Error al programar el artículo. Revisa los logs del servidor." });
   }
 }

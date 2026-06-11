@@ -1,6 +1,8 @@
 import { kv } from "@vercel/kv";
 import { google } from "googleapis";
 
+export const config = { maxDuration: 60 };
+
 // ─── Patrones de contenido ────────────────────────────────────────────────────
 
 // Palabras clave que indican contenido temporal/noticia

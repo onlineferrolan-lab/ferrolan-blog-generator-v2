@@ -1,6 +1,9 @@
 import { kv } from "@vercel/kv";
 import { verifyCronRequest } from "../../../lib/cron-auth";
 
+// Puede publicar varios artículos pendientes en una misma ejecución
+export const config = { maxDuration: 60 };
+
 // ─── Cron: Auto-publish scheduled articles to WordPress ────────────────────
 // Ejecutado por Vercel Cron a diario a las 9:00 (configurable en vercel.json).
 // Comprueba si hay artículos programados cuya fecha ya ha pasado

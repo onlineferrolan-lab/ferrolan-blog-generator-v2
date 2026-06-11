@@ -40,6 +40,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ articles, total: articles.length });
   } catch (err) {
     console.error("KV fetch error:", err);
-    return res.status(200).json({ articles: [], total: 0, error: err.message });
+    return res.status(200).json({ articles: [], total: 0, error: "No se pudo cargar el historial" });
   }
 }
