@@ -1,5 +1,7 @@
 import { verifyCronRequest } from "../../../lib/cron-auth";
 import { getScheduledMeta, getFullRecord, updateScheduledRecord } from "../../../lib/article-store";
+import { uploadEmbeddedImagesToWP, findDataUrlImages } from "../../../lib/wp-media";
+import { markdownToHtml } from "../../../lib/markdown-to-html";
 
 // Puede publicar varios artículos pendientes en una misma ejecución
 export const config = { maxDuration: 60 };
@@ -22,11 +24,25 @@ async function publishToWordPress(entry) {
     throw new Error("WordPress credentials not configured");
   }
 
-  const apiUrl = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2/posts`;
+  const apiBase = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
+  const apiUrl = `${apiBase}/posts`;
+  const authHeader = "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64");
+
+  // Si el markdown programado lleva imágenes IA embebidas (base64), subirlas
+  // a la media library y regenerar el HTML con las URLs reales.
+  let contenidoHtml = entry.contenidoHtml;
+  if (entry.contenidoMarkdown && findDataUrlImages(entry.contenidoMarkdown).length > 0) {
+    const { markdown } = await uploadEmbeddedImagesToWP(entry.contenidoMarkdown, {
+      apiUrl: apiBase,
+      authHeader,
+      slug: entry.slug,
+    });
+    contenidoHtml = markdownToHtml(markdown);
+  }
 
   const postData = {
     title: entry.titulo,
-    content: entry.contenidoHtml,
+    content: contenidoHtml,
     status: "publish",
     slug: entry.slug || undefined,
     excerpt: entry.metaDescription || undefined,
@@ -39,7 +55,7 @@ async function publishToWordPress(entry) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64"),
+      Authorization: authHeader,
     },
     body: JSON.stringify(postData),
   });

@@ -119,9 +119,36 @@ async function generateImageWithOpenAI(prompt) {
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
+// ─── Handler ─────────────────────────────────────────────────────────────────
+// Tres modos:
+//   mode: "prompts" → solo los 4 prompts (rápido, Haiku)
+//   mode: "image"   → UNA imagen a partir de un prompt (el dashboard lanza 4
+//                     requests paralelas; cada una queda muy por debajo del
+//                     timeout, antes las 4 juntas lo rozaban)
+//   sin mode        → pipeline completo de golpe (compatibilidad)
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: "OPENAI_API_KEY no configurada" });
+  }
+
+  const { mode } = req.body;
+
+  // ── Modo imagen única ──
+  if (mode === "image") {
+    const promptError = validateBody(req.body, { prompt: { required: true, max: 4000 } });
+    if (promptError) return res.status(400).json({ error: promptError });
+    try {
+      const src = await generateImageWithOpenAI(req.body.prompt);
+      return res.status(200).json({ src });
+    } catch (err) {
+      console.error("Image generation error (single):", err);
+      return res.status(500).json({ error: "Error generando la imagen. Inténtalo de nuevo." });
+    }
   }
 
   const validationError = validateBody(req.body, {
@@ -139,10 +166,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY no configurada" });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return res.status(500).json({ error: "OPENAI_API_KEY no configurada" });
-  }
-
   try {
     // 1. Claude genera los prompts específicos para este artículo
     const prompts = await buildImagePrompts(tema, categoria, articleText);
@@ -151,17 +174,28 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "No se pudieron generar los prompts de imagen" });
     }
 
-    // 2. OpenAI genera las 4 imágenes en paralelo
     const imageKeys = ["imagen1", "imagen2", "imagen3", "imagen4"].filter(k => prompts[k]?.prompt);
-    const imageResults = await Promise.all(
-      imageKeys.map(k => generateImageWithOpenAI(prompts[k].prompt))
-    );
-
-    const imagenes = imageKeys.map((k, i) => ({
-      src: imageResults[i],
+    const promptList = imageKeys.map((k, i) => ({
       descripcion: prompts[k].descripcion,
       prompt: prompts[k].prompt,
       tipo: ["ambiente", "detalle", "uso", "inspiracion"][i] || "adicional",
+    }));
+
+    // ── Modo solo-prompts ──
+    if (mode === "prompts") {
+      return res.status(200).json({ prompts: promptList });
+    }
+
+    // ── Modo completo (compatibilidad) ──
+    const imageResults = await Promise.all(
+      promptList.map((p) => generateImageWithOpenAI(p.prompt))
+    );
+
+    const imagenes = promptList.map((p, i) => ({
+      src: imageResults[i],
+      descripcion: p.descripcion,
+      prompt: p.prompt,
+      tipo: p.tipo,
     }));
 
     return res.status(200).json({ imagenes });

@@ -46,6 +46,13 @@ describe("markdownToHtml", () => {
     expect(html).toContain('<a href="/parquet">parquet</a>');
   });
 
+  it("convierte imágenes a figure/img (sin tragarse el ! como enlace)", () => {
+    const html = markdownToHtml("# T\n\n![Baño moderno](https://cdn.x/banyo.png)\n\nTexto.");
+    expect(html).toContain('<img src="https://cdn.x/banyo.png" alt="Baño moderno" />');
+    expect(html).toContain("<figcaption>Baño moderno</figcaption>");
+    expect(html).not.toContain('!<a href');
+  });
+
   it("descarta el bloque meta tras ---", () => {
     const html = markdownToHtml("# Título\n\nContenido.\n---\nMeta título: X\nSlug: y");
     expect(html).not.toContain("Meta título");

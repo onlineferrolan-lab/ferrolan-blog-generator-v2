@@ -1,6 +1,7 @@
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
 import { saveArticleRecord } from "../../lib/article-store";
 import { markdownToHtml } from "../../lib/markdown-to-html";
+import { uploadEmbeddedImagesToWP } from "../../lib/wp-media";
 import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Publish Now API ────────────────────────────────────────────────────────
@@ -38,10 +39,15 @@ export default async function handler(req, res) {
     const slug = extractSlug(articulo);
     const metaDescription = extractMetaDescription(articulo);
     const tags = extractTags(articulo);
-    const htmlContent = markdownToHtml(articulo);
 
     const apiUrl = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
     const authHeader = "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64");
+
+    // 0. Subir las imágenes IA embebidas (base64) a la media library de WP
+    //    y sustituirlas por sus URLs reales antes de convertir a HTML.
+    const { markdown: articuloConMedia, uploaded: mediaUploaded } =
+      await uploadEmbeddedImagesToWP(articulo, { apiUrl, authHeader, slug });
+    const htmlContent = markdownToHtml(articuloConMedia);
 
     // 1. Resolver tags
     let tagIds = [];
@@ -109,7 +115,7 @@ export default async function handler(req, res) {
       slug,
       tags,
       fecha: new Date().toISOString().split("T")[0],
-      contenido: articulo,
+      contenido: articuloConMedia,
       wpPostId: wpPost.id,
       wpLink: wpPost.link,
       wpStatus: "draft",
@@ -121,6 +127,7 @@ export default async function handler(req, res) {
       wpLink: wpPost.link,
       wpEditLink: `${wpUrl.replace(/\/$/, "")}/wp-admin/post.php?post=${wpPost.id}&action=edit`,
       titulo,
+      mediaUploaded,
       status: "draft",
     });
   } catch (err) {

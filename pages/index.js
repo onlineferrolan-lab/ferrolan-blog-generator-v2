@@ -211,14 +211,33 @@ export default function Home() {
     setSaving(false);
   };
 
+  // Generación de imágenes en dos fases: primero los prompts (rápido) y
+  // después cada imagen en su propia request — van apareciendo según terminan
+  // y ninguna request roza el timeout del servidor.
   const generarImagenes = async () => {
     if (!articulo) return;
     setLoadingImages(true); setImagenes([]); setImageError("");
     try {
-      const res = await fetch("/api/generate-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tema, categoria, articleText: articulo }) });
-      const data = await res.json();
-      if (data.imagenes) setImagenes(data.imagenes);
-      else setImageError(data.error || "Error generando imágenes.");
+      const pRes = await fetch("/api/generate-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "prompts", tema, categoria, articleText: articulo }) });
+      const pData = await pRes.json();
+      if (!pData.prompts?.length) {
+        setImageError(pData.error || "No se pudieron generar los prompts de imagen.");
+        setLoadingImages(false);
+        return;
+      }
+
+      const results = await Promise.allSettled(pData.prompts.map(async (p) => {
+        const r = await fetch("/api/generate-images", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "image", prompt: p.prompt }) });
+        const d = await r.json();
+        if (!d.src) throw new Error(d.error || "Error generando la imagen");
+        const img = { src: d.src, descripcion: p.descripcion, prompt: p.prompt, tipo: p.tipo };
+        setImagenes(prev => [...prev, img]);
+        return img;
+      }));
+
+      const ok = results.filter(r => r.status === "fulfilled").length;
+      if (ok === 0) setImageError("Error generando las imágenes. Inténtalo de nuevo.");
+      else if (ok < pData.prompts.length) setImageError(`Se generaron ${ok} de ${pData.prompts.length} imágenes.`);
     } catch { setImageError("Error de conexión al generar imágenes."); }
     setLoadingImages(false);
   };
