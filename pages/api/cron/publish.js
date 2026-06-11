@@ -1,9 +1,14 @@
 import { kv } from "@vercel/kv";
+import { verifyCronRequest } from "../../../lib/cron-auth";
 
 // ─── Cron: Auto-publish scheduled articles to WordPress ────────────────────
-// Ejecutado por Vercel Cron cada hora (configurable en vercel.json).
+// Ejecutado por Vercel Cron a diario a las 9:00 (configurable en vercel.json).
 // Comprueba si hay artículos programados cuya fecha ya ha pasado
 // y los publica en WordPress via REST API.
+//
+// Seguridad: el middleware deja pasar /api/cron/* sin cookie, así que este
+// handler EXIGE el header "Authorization: Bearer CRON_SECRET" que Vercel
+// añade automáticamente cuando la variable CRON_SECRET está definida.
 
 async function publishToWordPress(entry) {
   const wpUrl = process.env.WORDPRESS_URL; // ej: https://ferrolan.es
@@ -52,11 +57,10 @@ async function publishToWordPress(entry) {
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  // Verificar que es una llamada legítima del cron
-  // Vercel envía el header Authorization con CRON_SECRET
-  const authHeader = req.headers.authorization;
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized" });
+  // Verificar que es una llamada legítima del cron (CRON_SECRET obligatorio)
+  const auth = verifyCronRequest(req.headers.authorization, process.env.CRON_SECRET);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ error: auth.error });
   }
 
   const now = new Date();

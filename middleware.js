@@ -1,54 +1,56 @@
 import { NextResponse } from "next/server";
+import {
+  isPublicPath,
+  isStaticAsset,
+  computeToken,
+  timingSafeEqualStr,
+} from "./lib/edge-auth";
 
 // ─── Auth Middleware ────────────────────────────────────────────────────────
-// Protege TODAS las rutas (páginas y API) excepto /login, /api/auth y assets.
+// Protege TODAS las rutas (páginas y API) excepto /login, /api/auth, /api/cron
+// (que exige CRON_SECRET en su handler) y assets.
 // Comprueba que exista la cookie "ferrolan-auth" con un token válido.
 // El token es SHA-256(password + secret) generado en /api/auth al hacer login.
-
-const PUBLIC_PATHS = ["/login", "/api/auth"];
-
-async function computeToken(password, secret) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + secret);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+//
+// FAIL-CLOSED: en producción, si AUTH_PASSWORD no está configurada se deniega
+// el acceso (antes se permitía todo, y un despiste de configuración dejaba la
+// app y sus APIs de pago expuestas públicamente). En desarrollo local sigue
+// abierto para no estorbar.
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Allow public paths
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (isPublicPath(pathname) || isStaticAsset(pathname)) {
     return NextResponse.next();
   }
 
-  // Allow static assets and Next.js internals
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon") ||
-    pathname.match(/\.(png|jpg|jpeg|svg|ico|css|js|woff|woff2)$/)
-  ) {
-    return NextResponse.next();
-  }
-
-  // Check auth cookie
-  const authCookie = request.cookies.get("ferrolan-auth")?.value;
   const password = process.env.AUTH_PASSWORD;
   const secret = process.env.AUTH_SECRET || "ferrolan-default-secret-2026";
 
   if (!password) {
-    // If AUTH_PASSWORD is not set, allow everything (dev mode)
-    return NextResponse.next();
+    if (process.env.NODE_ENV !== "production") {
+      // Modo desarrollo sin contraseña: acceso libre
+      return NextResponse.next();
+    }
+    // Producción sin AUTH_PASSWORD: denegar todo (fail-closed)
+    if (pathname.startsWith("/api/")) {
+      return new NextResponse(
+        JSON.stringify({ error: "AUTH_PASSWORD no configurada en el servidor" }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return redirectToLogin(request);
   }
+
+  const authCookie = request.cookies.get("ferrolan-auth")?.value;
 
   if (!authCookie) {
     return redirectToLogin(request);
   }
 
-  // Verify token
+  // Verify token (comparación en tiempo constante)
   const expectedToken = await computeToken(password, secret);
-  if (authCookie !== expectedToken) {
+  if (!timingSafeEqualStr(authCookie, expectedToken)) {
     // Invalid cookie — clear it and redirect
     const response = redirectToLogin(request);
     response.cookies.delete("ferrolan-auth");
