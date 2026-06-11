@@ -2,6 +2,7 @@ import { callAI } from "../../lib/ai-client";
 import { kv } from "@vercel/kv";
 import { normalizeKeyword, normalizeSlug, matchType } from "../../lib/keyword-utils";
 import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
 
 export const config = { maxDuration: 60 };
 
@@ -141,9 +142,7 @@ Devuelve el análisis competitivo en formato JSON.`;
       checkKeywordAvailability(kwToCheck),
     ]);
 
-    // Parse JSON response — limpiar por si Claude envuelve en markdown
-    const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const data = JSON.parse(cleaned);
+    const data = parseLLMJson(text);
 
     return res.status(200).json({ ...data, keywordCheck });
   } catch (err) {

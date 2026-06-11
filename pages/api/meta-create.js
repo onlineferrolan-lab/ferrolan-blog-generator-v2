@@ -1,5 +1,6 @@
 import { callAI } from "../../lib/ai-client";
 import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
 
 // ─── Meta Creator API ─────────────────────────────────────────────────────────
 // Genera opciones de meta título y descripción para un artículo de Ferrolan.
@@ -90,8 +91,7 @@ Responde con el JSON de las 3 opciones.`;
 
   try {
     const text = await callAI({ provider, tier: "fast", systemPrompt: META_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
-    const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const data = JSON.parse(cleaned);
+    const data = parseLLMJson(text);
 
     return res.status(200).json(data);
   } catch (err) {

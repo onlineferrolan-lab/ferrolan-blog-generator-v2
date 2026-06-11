@@ -1,5 +1,6 @@
 import { callAI } from "../../lib/ai-client";
 import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
 
 // Generación de prompts + 4 imágenes: es la ruta más lenta de la app
 export const config = { maxDuration: 60 };
@@ -70,10 +71,9 @@ Los prompts deben estar en inglés y ser muy específicos y descriptivos.`;
   });
 
   try {
-    const cleaned = raw.replace(/```json|```/g, "").trim();
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
-    console.error("Error parsing image prompts JSON:", raw);
+    console.error("Error parsing image prompts JSON:", raw.slice(0, 300));
     return null;
   }
 }

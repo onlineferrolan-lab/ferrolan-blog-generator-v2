@@ -1,4 +1,5 @@
 import { kv } from "@vercel/kv";
+import { fetchPrestashopCategoriesRaw } from "../../lib/prestashop";
 
 // ─── Prestashop Categories API ───────────────────────────────────────────────
 // Excluye categoría 16 y sus descendientes.
@@ -38,25 +39,17 @@ export default async function handler(req, res) {
     } catch { /* continuar sin caché */ }
   }
 
-  const apiKey = process.env.PRESTASHOP_API_KEY;
-  const apiUrl = process.env.PRESTASHOP_API_URL || "https://ferrolan.es/api";
-
-  if (!apiKey) {
-    return res.status(200).json({ categories: [], fallback: true });
-  }
-
-  const headers = { Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64") };
-
   try {
     // language=1 = español. Incluimos link_rewrite — con language=1 puede venir como string.
     // Si no (null/vacío), usamos slugify(name) como fallback.
-    const url = `${apiUrl}/categories?output_format=JSON&language=1&display=[id,name,id_parent,active,level_depth,link_rewrite]&limit=500`;
-    const resp = await fetch(url, { headers });
+    const all = await fetchPrestashopCategoriesRaw({
+      display: "[id,name,id_parent,active,level_depth,link_rewrite]",
+      language: 1,
+    });
 
-    if (!resp.ok) throw new Error(`Prestashop responded with ${resp.status}`);
-
-    const json = await resp.json();
-    const all = (json.categories || []).filter((c) => c.active === "1");
+    if (!all) {
+      return res.status(200).json({ categories: [], fallback: true });
+    }
 
     // Solo excluir cat 16 y sus descendientes por propagación.
     // NO incluir cat 1 ni 2 aquí — su propagación eliminaría todo el catálogo.
@@ -122,6 +115,6 @@ export default async function handler(req, res) {
     return res.status(200).json(result);
   } catch (err) {
     console.error("Prestashop categories error:", err);
-    return res.status(200).json({ categories: [], error: err.message });
+    return res.status(200).json({ categories: [], error: "No se pudieron cargar las categorías" });
   }
 }

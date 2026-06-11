@@ -6,6 +6,7 @@
 
 import { google } from "googleapis";
 import { kv } from "@vercel/kv";
+import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 
 export const config = { maxDuration: 60 };
@@ -97,15 +98,10 @@ const STATIC_DATA = {
 // ─── Conexión con Google Search Console API ────────────────────────────────
 
 async function fetchLiveGSCData() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
   const siteUrl = process.env.GSC_SITE_URL || "sc-domain:ferrolan.es";
 
-  if (!email || !key) return null;
-
-  const auth = new google.auth.JWT(email, null, key.replace(/\\n/g, "\n"), [
-    "https://www.googleapis.com/auth/webmasters.readonly",
-  ]);
+  const auth = getGoogleAuth([SCOPES.searchConsole]);
+  if (!auth) return null;
 
   const searchconsole = google.searchconsole({ version: "v1", auth });
 

@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
 import { markdownToHtml } from "../../lib/markdown-to-html";
 import { validateBody, MAX } from "../../lib/validate";
+import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
 
 export const config = { maxDuration: 60 };
 
@@ -24,13 +25,9 @@ async function getSheetName(sheets, spreadsheetId) {
 }
 
 function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !key) throw new Error("Google Service Account not configured");
-
-  return new google.auth.JWT(email, null, key.replace(/\\n/g, "\n"), [
-    "https://www.googleapis.com/auth/spreadsheets",
-  ]);
+  const auth = getGoogleAuth([SCOPES.sheets]);
+  if (!auth) throw new Error("Google Service Account not configured");
+  return auth;
 }
 
 // Buscar la última fila ocupada a partir de SHEET_START_ROW
