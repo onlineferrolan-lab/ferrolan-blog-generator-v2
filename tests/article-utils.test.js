@@ -66,6 +66,38 @@ describe("extractMetaDescription", () => {
   });
 });
 
+// Claude a menudo formatea el bloque meta con negrita markdown:
+// "- **Slug URL:** valor". Los extractores deben limpiar esa decoración:
+// sin esto, el slug llega a WordPress como "---valor" y la meta description
+// con asteriscos literales.
+describe("bloque meta con formato markdown (negrita/listas)", () => {
+  const META_BOLD = `# Título
+
+Contenido.
+
+---
+
+- **Meta título:** Azulejos de baño: guía
+- **Meta descripción:** Aprende a elegir los azulejos para tu baño.
+- **Slug URL sugerido:** como-elegir-azulejos-bano
+- **Etiquetas:** azulejos, baño, **cerámica**
+`;
+
+  it("extractSlug limpia negrita y no genera guiones espurios", () => {
+    expect(extractSlug(META_BOLD)).toBe("como-elegir-azulejos-bano");
+  });
+
+  it("extractMetaDescription limpia asteriscos", () => {
+    expect(extractMetaDescription(META_BOLD)).toBe(
+      "Aprende a elegir los azulejos para tu baño."
+    );
+  });
+
+  it("extractTags limpia negrita en cada etiqueta", () => {
+    expect(extractTags(META_BOLD)).toEqual(["azulejos", "baño", "cerámica"]);
+  });
+});
+
 describe("extractTags", () => {
   it("extrae las etiquetas como array", () => {
     expect(extractTags(ARTICULO)).toEqual(["azulejos", "baño", "cerámica", "reforma"]);
