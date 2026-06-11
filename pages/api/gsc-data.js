@@ -5,9 +5,17 @@
 // Si no → datos estáticos del último análisis manual.
 
 import { google } from "googleapis";
+import { kv } from "@vercel/kv";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 
 export const config = { maxDuration: 60 };
+
+// Caché del fetch a Google Search Console: los datos de GSC cambian como mucho
+// una vez al día (la propia API tiene ~3 días de delay), pero el dashboard los
+// pedía en cada carga. La anotación de cobertura NO se cachea: se recalcula
+// fresca para reflejar artículos recién guardados.
+const GSC_CACHE_KEY = "gsc:data:cache";
+const GSC_CACHE_TTL = 6 * 60 * 60; // 6 horas, igual que keywords-data
 
 // Nivel de coincidencia para considerar un tema "ya cubierto":
 // "balanced" = exacta/contenida + solapamiento alto (≥60%).
@@ -268,15 +276,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const forceRefresh = req.query.refresh === "true";
+
   try {
-    // Intentar datos en vivo
+    // 1. Caché KV (salvo refresh manual)
+    if (!forceRefresh) {
+      try {
+        const cached = await kv.get(GSC_CACHE_KEY);
+        if (cached) {
+          const data = typeof cached === "string" ? JSON.parse(cached) : cached;
+          return res.status(200).json(await annotatePayload({ ...data, cached: true }));
+        }
+      } catch {
+        // caché no disponible — seguimos a datos en vivo
+      }
+    }
+
+    // 2. Datos en vivo de la API de GSC
     const liveData = await fetchLiveGSCData();
 
     if (liveData) {
+      try {
+        await kv.set(GSC_CACHE_KEY, JSON.stringify(liveData), { ex: GSC_CACHE_TTL });
+      } catch {
+        // sin caché seguimos funcionando igual
+      }
       return res.status(200).json(await annotatePayload(liveData));
     }
 
-    // Fallback: datos estáticos
+    // 3. Fallback: datos estáticos
     return res.status(200).json(await annotatePayload({
       live: false,
       ...STATIC_DATA,
@@ -287,7 +315,7 @@ export default async function handler(req, res) {
     // Si falla la API de Google, devolver datos estáticos
     return res.status(200).json(await annotatePayload({
       live: false,
-      error_detail: err.message,
+      gscError: true,
       ...STATIC_DATA,
     }));
   }

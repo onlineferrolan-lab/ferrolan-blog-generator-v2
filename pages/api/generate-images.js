@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { callAI } from "../../lib/ai-client";
 import { validateBody, MAX } from "../../lib/validate";
 
 // Generación de prompts + 4 imágenes: es la ruta más lenta de la app
@@ -7,9 +7,7 @@ export const config = { maxDuration: 60 };
 // ─── Genera los prompts de imagen usando Claude como director de fotografía ──
 
 async function buildImagePrompts(tema, categoria, articleText) {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const systemPrompt = `Eres un director de fotografía especializado en contenido editorial para el sector de construcción, interiorismo y decoración. 
+  const systemPrompt = `Eres un director de fotografía especializado en contenido editorial para el sector de construcción, interiorismo y decoración.
 Tu trabajo es crear prompts precisos para generación de imágenes hiperrealistas que acompañen artículos de blog.
 
 REGLAS ABSOLUTAS:
@@ -61,14 +59,15 @@ IMAGEN 4 — Inspiración / mood: Imagen de inspiración con estética aspiracio
 
 Los prompts deben estar en inglés y ser muy específicos y descriptivos.`;
 
-  const message = await client.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 1200,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
+  // Tier "fast" (Haiku): redactar 4 prompts de imagen es una tarea sencilla,
+  // usar el modelo principal aquí solo encarecía cada generación.
+  const raw = await callAI({
+    provider: "anthropic",
+    tier: "fast",
+    systemPrompt,
+    userPrompt,
+    maxTokens: 1200,
   });
-
-  const raw = message.content[0]?.text || "{}";
 
   try {
     const cleaned = raw.replace(/```json|```/g, "").trim();
