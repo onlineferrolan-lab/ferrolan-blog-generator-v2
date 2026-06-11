@@ -1,6 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { kv } from "@vercel/kv";
 import { google } from "googleapis";
+import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
+
+// Nivel de coincidencia para "ya cubierto": exacta/contenida + solapamiento ≥60%.
+const COVERAGE_LEVEL = "balanced";
 
 // ─── Prestashop Config ──────────────────────────────────────────────────────
 
@@ -437,9 +441,23 @@ export default async function handler(req, res) {
     }
 
     // Classify
-    const sinCubrir = result.keywords.filter((k) => k.tipo === "sin_cubrir");
-    const oportunidades = result.keywords.filter((k) => k.tipo === "oportunidad");
-    const sugeridas = result.keywords.filter((k) => k.tipo === "sugerida");
+    let sinCubrir = result.keywords.filter((k) => k.tipo === "sin_cubrir");
+    let oportunidades = result.keywords.filter((k) => k.tipo === "oportunidad");
+    let sugeridas = result.keywords.filter((k) => k.tipo === "sugerida");
+
+    // Filtro determinista de cobertura (refuerza el filtro blando del prompt):
+    // marca cada keyword que ya tenga un artículo publicado. El frontend decide
+    // si las oculta o las muestra en gris con enlace al artículo existente.
+    try {
+      const coverageIndex = await loadCoverageIndex();
+      if (coverageIndex.length > 0) {
+        sinCubrir     = annotateCoverage(sinCubrir, coverageIndex, "keyword", COVERAGE_LEVEL);
+        oportunidades = annotateCoverage(oportunidades, coverageIndex, "keyword", COVERAGE_LEVEL);
+        sugeridas     = annotateCoverage(sugeridas, coverageIndex, "keyword", COVERAGE_LEVEL);
+      }
+    } catch (covErr) {
+      console.error("[keywords-data] coverage annotation skipped:", covErr.message);
+    }
 
     const responseData = {
       configured: true,
