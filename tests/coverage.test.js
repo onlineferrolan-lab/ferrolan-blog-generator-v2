@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { findCoverage, annotateCoverage } from "../lib/coverage";
+import { findCoverage, findAllConflicts, annotateCoverage } from "../lib/coverage";
+import { toArticleMeta } from "../lib/article-store";
 import { normalizeKeyword, normalizeSlug } from "../lib/keyword-utils";
 
 // Índice como el que construye loadCoverageIndex()
@@ -59,6 +60,52 @@ describe("findCoverage", () => {
     expect(findCoverage("", makeIndex()).covered).toBe(false);
     expect(findCoverage("azulejos", []).covered).toBe(false);
     expect(findCoverage("azulejos", null).covered).toBe(false);
+  });
+});
+
+describe("findAllConflicts", () => {
+  it("devuelve todos los conflictos ordenados por calidad de match", () => {
+    const index = [
+      ...makeIndex(),
+      {
+        title: "Azulejos baño",
+        slug: "azulejos-bano",
+        url: null,
+        source: "kv",
+        date: "2026-03-01",
+        fields: [{ norm: normalizeKeyword("Azulejos baño") }],
+      },
+    ];
+    const conflicts = findAllConflicts("azulejos baño", index);
+    expect(conflicts.length).toBe(2);
+    // El exact va primero
+    expect(conflicts[0].matchType).toBe("exact");
+    expect(conflicts[0].title).toBe("Azulejos baño");
+    expect(conflicts[1].matchType).toBe("contains");
+  });
+
+  it("devuelve array vacío sin coincidencias o sin índice", () => {
+    expect(findAllConflicts("grifería monomando", makeIndex())).toEqual([]);
+    expect(findAllConflicts("azulejos", [])).toEqual([]);
+    expect(findAllConflicts("", makeIndex())).toEqual([]);
+  });
+});
+
+describe("toArticleMeta", () => {
+  it("quita los campos de contenido pesados", () => {
+    const meta = toArticleMeta({
+      id: "article:1",
+      titulo: "T",
+      contenido: "x".repeat(5000),
+      contenidoMarkdown: "y",
+      contenidoHtml: "<p>z</p>",
+      slug: "t",
+    });
+    expect(meta).toEqual({ id: "article:1", titulo: "T", slug: "t" });
+  });
+
+  it("tolera entradas no-objeto", () => {
+    expect(toArticleMeta(null)).toBeNull();
   });
 });
 

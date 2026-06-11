@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { getScheduledMeta } from "../../lib/article-store";
 
 // ─── Scheduled Articles List API ────────────────────────────────────────────
 
@@ -8,17 +8,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const ids = await kv.lrange("scheduled:index", 0, -1);
-    if (!ids || ids.length === 0) {
-      return res.status(200).json({ scheduled: [], total: 0 });
-    }
+    const metas = await getScheduledMeta();
 
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-
-    const scheduled = records
-      .filter(Boolean)
-      .map((r) => {
-        const parsed = typeof r === "string" ? JSON.parse(r) : r;
+    const scheduled = metas
+      .map((parsed) => {
         return {
           id: parsed.id,
           status: parsed.status,

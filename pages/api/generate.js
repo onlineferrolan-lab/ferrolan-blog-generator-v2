@@ -1,6 +1,6 @@
-import { kv } from "@vercel/kv";
 import { callAI } from "../../lib/ai-client";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
+import { getArticlesMeta, saveArticleRecord } from "../../lib/article-store";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
 import { validateBody, MAX } from "../../lib/validate";
 
@@ -21,10 +21,7 @@ async function saveArticle(tema, categoria, text) {
       slug: extractSlug(text),
       fecha: new Date().toISOString().split("T")[0], // YYYY-MM-DD
     };
-    // Guardamos el registro individual
-    await kv.set(id, JSON.stringify(entry));
-    // Añadimos el id al índice general (lista ordenada por fecha)
-    await kv.lpush("articles:index", id);
+    await saveArticleRecord(entry);
     return entry;
   } catch (err) {
     // Si KV falla no rompemos la generación, solo logueamos
@@ -33,16 +30,11 @@ async function saveArticle(tema, categoria, text) {
   }
 }
 
-// Recupera todos los artículos del índice para pasarlos al prompt
+// Recupera los metadatos del historial para el prompt (un solo comando KV)
 async function getArticleHistory() {
   try {
-    const ids = await kv.lrange("articles:index", 0, -1); // todos
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes primero
+    const metas = await getArticlesMeta();
+    return metas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes primero
   } catch (err) {
     console.error("KV fetch error:", err);
     return [];

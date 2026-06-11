@@ -1,12 +1,14 @@
 import { kv } from "@vercel/kv";
+import { replaceWpPosts } from "../../lib/article-store";
 
 // ─── Sync Blog Posts API ──────────────────────────────────────────────────────
 // GET  → Devuelve estado de la última sincronización con WordPress.
 // POST → Sincroniza todos los posts publicados de WordPress a Vercel KV.
 //
 // Estructura KV resultante:
-//   wp:posts:index        → Lista de IDs (strings) de los posts
-//   wp:post:{id}          → JSON con metadatos del post
+//   wp:posts:meta         → Hash id → metadatos (lectura en 1 comando)
+//   wp:posts:index        → Lista de IDs (formato antiguo, compatibilidad)
+//   wp:post:{id}          → JSON con metadatos del post (formato antiguo)
 //   wp:sync:meta          → JSON con lastSync, count, totalPages
 
 export const config = { maxDuration: 60 };
@@ -80,50 +82,32 @@ export default async function handler(req, res) {
         for (const r of results) allPosts = allPosts.concat(r.posts);
       }
 
-      // 3. Limpiar índice anterior
-      await kv.del(WP_POSTS_INDEX);
+      // 3. Normalizar registros y guardarlos (hash de metadatos + formato antiguo)
+      const records = allPosts.map((post) => ({
+        id: String(post.id),
+        slug: post.slug || "",
+        title: post.title?.rendered || post.slug || "",
+        excerpt: post.excerpt?.rendered
+          ? post.excerpt.rendered.replace(/<[^>]+>/g, "").trim().slice(0, 200)
+          : "",
+        tags: post.tags || [],
+        date: post.date || "",
+        link: post.link || "",
+      }));
 
-      // 4. Guardar cada post + construir índice
-      const pipeline = [];
-      const savedIds = [];
+      await replaceWpPosts(records);
 
-      for (const post of allPosts) {
-        const id = String(post.id);
-        const record = {
-          id,
-          slug: post.slug || "",
-          title: post.title?.rendered || post.slug || "",
-          excerpt: post.excerpt?.rendered
-            ? post.excerpt.rendered.replace(/<[^>]+>/g, "").trim().slice(0, 200)
-            : "",
-          tags: post.tags || [],
-          date: post.date || "",
-          link: post.link || "",
-        };
-
-        pipeline.push(kv.set(`wp:post:${id}`, JSON.stringify(record)));
-        savedIds.push(id);
-      }
-
-      // Guardar todos los registros en paralelo
-      await Promise.all(pipeline);
-
-      // Guardar índice (lpush en orden inverso para mantener cronológico)
-      if (savedIds.length > 0) {
-        await kv.lpush(WP_POSTS_INDEX, ...savedIds.reverse());
-      }
-
-      // 5. Guardar metadatos del sync
+      // 4. Guardar metadatos del sync
       const meta = {
         lastSync: new Date().toISOString(),
-        count: savedIds.length,
+        count: records.length,
         totalPages,
       };
       await kv.set(WP_SYNC_META, JSON.stringify(meta));
 
       return res.status(200).json({
         success: true,
-        synced: savedIds.length,
+        synced: records.length,
         totalPages,
         lastSync: meta.lastSync,
       });

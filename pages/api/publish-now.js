@@ -1,5 +1,5 @@
-import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord } from "../../lib/article-store";
 import { markdownToHtml } from "../../lib/markdown-to-html";
 import { validateBody, MAX } from "../../lib/validate";
 
@@ -100,7 +100,7 @@ export default async function handler(req, res) {
 
     // 3. Guardar en historial de artículos para que Claude no repita
     const articleId = `article:${Date.now()}`;
-    await kv.set(articleId, JSON.stringify({
+    await saveArticleRecord({
       id: articleId,
       tema,
       categoria: categoria || "",
@@ -113,8 +113,7 @@ export default async function handler(req, res) {
       wpPostId: wpPost.id,
       wpLink: wpPost.link,
       wpStatus: "draft",
-    }));
-    await kv.lpush("articles:index", articleId);
+    });
 
     return res.status(200).json({
       published: true,

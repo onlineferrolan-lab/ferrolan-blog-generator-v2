@@ -1,6 +1,6 @@
-import { kv } from "@vercel/kv";
 import { google } from "googleapis";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord, saveScheduledRecord } from "../../lib/article-store";
 import { markdownToHtml } from "../../lib/markdown-to-html";
 import { validateBody, MAX } from "../../lib/validate";
 import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
@@ -207,12 +207,11 @@ export default async function handler(req, res) {
       contenidoHtml: htmlContent,
     };
 
-    await kv.set(id, JSON.stringify(entry));
-    await kv.lpush("scheduled:index", id);
+    await saveScheduledRecord(entry);
 
     // 6. También guardar en historial general para que Claude no repita temas
     const articleId = `article:${Date.now()}`;
-    await kv.set(articleId, JSON.stringify({
+    await saveArticleRecord({
       id: articleId,
       tema,
       categoria: categoria || "",
@@ -222,8 +221,7 @@ export default async function handler(req, res) {
       tags: extractTags(articulo),
       fecha: new Date().toISOString().split("T")[0],
       contenido: articulo,
-    }));
-    await kv.lpush("articles:index", articleId);
+    });
 
     return res.status(200).json({
       scheduled: true,

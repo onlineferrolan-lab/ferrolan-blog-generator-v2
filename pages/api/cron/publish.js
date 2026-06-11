@@ -1,5 +1,5 @@
-import { kv } from "@vercel/kv";
 import { verifyCronRequest } from "../../../lib/cron-auth";
+import { getScheduledMeta, getFullRecord, updateScheduledRecord } from "../../../lib/article-store";
 
 // Puede publicar varios artículos pendientes en una misma ejecución
 export const config = { maxDuration: 60 };
@@ -70,27 +70,22 @@ export default async function handler(req, res) {
   const results = { checked: 0, published: 0, failed: 0, errors: [] };
 
   try {
-    // Obtener todos los artículos programados
-    const ids = await kv.lrange("scheduled:index", 0, -1);
-    if (!ids || ids.length === 0) {
+    // Metadatos de todos los programados (un solo comando KV)
+    const metas = await getScheduledMeta();
+    if (metas.length === 0) {
       return res.status(200).json({ message: "No scheduled articles", ...results });
     }
+    results.checked = metas.length;
 
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
+    // Solo los "scheduled" cuya fecha ya pasó necesitan el registro completo
+    const due = metas.filter(
+      (m) => m.status === "scheduled" && m.publishDate && new Date(m.publishDate) <= now
+    );
 
-    for (let i = 0; i < records.length; i++) {
-      const raw = records[i];
-      if (!raw) continue;
-
-      const entry = typeof raw === "string" ? JSON.parse(raw) : raw;
-      results.checked++;
-
-      // Solo procesar artículos con status "scheduled"
-      if (entry.status !== "scheduled") continue;
-
-      // Comprobar si la fecha de publicación ya pasó
-      const publishTime = new Date(entry.publishDate);
-      if (publishTime > now) continue; // Aún no es la hora
+    for (const meta of due) {
+      // Cargar el registro completo (con contenidoHtml) solo para los que tocan
+      const entry = await getFullRecord(meta.id);
+      if (!entry) continue;
 
       // ¡Es hora de publicar!
       try {
@@ -101,7 +96,7 @@ export default async function handler(req, res) {
         entry.wpPostId = wpResult.id;
         entry.wpLink = wpResult.link;
         entry.publishedAt = now.toISOString();
-        await kv.set(entry.id, JSON.stringify(entry));
+        await updateScheduledRecord(entry);
 
         results.published++;
         console.log(`✅ Published: "${entry.titulo}" → ${wpResult.link}`);
@@ -110,7 +105,7 @@ export default async function handler(req, res) {
         entry.status = "failed";
         entry.error = pubErr.message;
         entry.failedAt = now.toISOString();
-        await kv.set(entry.id, JSON.stringify(entry));
+        await updateScheduledRecord(entry);
 
         results.failed++;
         results.errors.push({ id: entry.id, titulo: entry.titulo, error: pubErr.message });

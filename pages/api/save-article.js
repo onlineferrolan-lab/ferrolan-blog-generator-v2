@@ -1,5 +1,5 @@
-import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord, deleteArticleRecord } from "../../lib/article-store";
 import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Save Article API ──────────────────────────────────────────────────────
@@ -40,8 +40,7 @@ export default async function handler(req, res) {
         contenido: articulo,
       };
 
-      await kv.set(id, JSON.stringify(entry));
-      await kv.lpush("articles:index", id);
+      await saveArticleRecord(entry);
 
       return res.status(200).json({ saved: true, id, entry: { ...entry, contenido: undefined } });
     } catch (err) {
@@ -59,8 +58,7 @@ export default async function handler(req, res) {
     }
 
     try {
-      await kv.del(id);
-      await kv.lrem("articles:index", 0, id);
+      await deleteArticleRecord(id);
       return res.status(200).json({ deleted: true, id });
     } catch (err) {
       console.error("KV delete error:", err);

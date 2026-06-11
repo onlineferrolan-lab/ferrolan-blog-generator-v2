@@ -1,6 +1,6 @@
 import { callAI } from "../../lib/ai-client";
-import { kv } from "@vercel/kv";
-import { normalizeKeyword, normalizeSlug, matchType } from "../../lib/keyword-utils";
+import { normalizeKeyword } from "../../lib/keyword-utils";
+import { loadCoverageIndex, findAllConflicts } from "../../lib/coverage";
 import { validateBody, MAX } from "../../lib/validate";
 import { parseLLMJson } from "../../lib/llm-json";
 
@@ -41,60 +41,15 @@ Estructura exacta del JSON:
 }`;
 
 // ─── Keyword availability check (inline, sin HTTP extra) ─────────────────────
+// Reutiliza el índice de cobertura compartido (lib/coverage + lib/article-store).
 async function checkKeywordAvailability(keyword) {
-  if (!keyword) return { available: true, conflicts: [] };
-  const normalizedKw = normalizeKeyword(keyword);
-  if (!normalizedKw) return { available: true, conflicts: [] };
+  if (!keyword || !normalizeKeyword(keyword)) {
+    return { available: true, conflicts: [] };
+  }
 
   try {
-    const [kvIds, wpIds] = await Promise.all([
-      kv.lrange("articles:index", 0, -1),
-      kv.lrange("wp:posts:index", 0, -1),
-    ]);
-
-    const [kvRecordsRaw, wpRecordsRaw] = await Promise.all([
-      kvIds.length > 0 ? Promise.all(kvIds.map((id) => kv.get(id))) : Promise.resolve([]),
-      wpIds.length > 0 ? Promise.all(wpIds.map((id) => kv.get(`wp:post:${id}`))) : Promise.resolve([]),
-    ]);
-
-    const conflicts = [];
-
-    for (const raw of kvRecordsRaw) {
-      if (!raw) continue;
-      const article = typeof raw === "string" ? JSON.parse(raw) : raw;
-      const fields = [
-        normalizeKeyword(article.titulo || ""),
-        normalizeSlug(article.slug || ""),
-        normalizeKeyword(article.keywords || ""),
-        normalizeKeyword(article.tema || ""),
-      ];
-      let best = null;
-      for (const f of fields) {
-        const mt = matchType(normalizedKw, f);
-        if (mt && (!best || mt === "exact" || (mt === "contains" && best !== "exact"))) best = mt;
-      }
-      if (best) {
-        conflicts.push({ title: article.titulo || article.tema || "Sin título", slug: article.slug || "", source: "kv", matchType: best, date: article.fecha || "" });
-      }
-    }
-
-    for (const raw of wpRecordsRaw) {
-      if (!raw) continue;
-      const post = typeof raw === "string" ? JSON.parse(raw) : raw;
-      const fields = [normalizeKeyword(post.title || ""), normalizeSlug(post.slug || "")];
-      let best = null;
-      for (const f of fields) {
-        const mt = matchType(normalizedKw, f);
-        if (mt && (!best || mt === "exact" || (mt === "contains" && best !== "exact"))) best = mt;
-      }
-      if (best) {
-        conflicts.push({ title: post.title || post.slug || "Sin título", slug: post.slug || "", url: post.link || null, source: "wordpress", matchType: best, date: post.date ? post.date.slice(0, 10) : "" });
-      }
-    }
-
-    const order = { exact: 0, contains: 1, overlap: 2 };
-    conflicts.sort((a, b) => (order[a.matchType] || 2) - (order[b.matchType] || 2));
-
+    const index = await loadCoverageIndex();
+    const conflicts = findAllConflicts(keyword, index);
     return { available: conflicts.length === 0, conflicts };
   } catch {
     return { available: true, conflicts: [], error: "No se pudo verificar la BBDD de keywords" };

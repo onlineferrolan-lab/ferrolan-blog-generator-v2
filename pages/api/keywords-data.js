@@ -4,6 +4,7 @@ import { callAI } from "../../lib/ai-client";
 import { parseLLMJson } from "../../lib/llm-json";
 import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
 import { fetchPrestashopCategoriesRaw } from "../../lib/prestashop";
+import { getArticlesMeta, getWpPostsMeta } from "../../lib/article-store";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 
 // Prestashop + GSC + WordPress + análisis con Claude en una sola request
@@ -77,31 +78,19 @@ async function fetchPrestashopCategories() {
   }));
 }
 
-// ─── KV: get published articles ─────────────────────────────────────────────
+// ─── KV: artículos y posts de WP (hash de metadatos, 1 comando) ─────────────
 
 async function getArticleHistory() {
   try {
-    const ids = await kv.lrange("articles:index", 0, -1);
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+    return await getArticlesMeta();
   } catch {
     return [];
   }
 }
 
-// ─── KV: get synced WordPress posts ─────────────────────────────────────────
-
 async function getWordPressPosts() {
   try {
-    const ids = await kv.lrange("wp:posts:index", 0, -1);
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(`wp:post:${id}`)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+    return await getWpPostsMeta();
   } catch {
     return [];
   }
