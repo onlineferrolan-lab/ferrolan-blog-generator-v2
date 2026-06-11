@@ -1,11 +1,12 @@
-import { callAI } from "../../lib/ai-client";
+import { callAI, callAIStream } from "../../lib/ai-client";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
 import { getArticlesMeta, saveArticleRecord } from "../../lib/article-store";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
 import { validateBody, MAX } from "../../lib/validate";
 
-// La generación con el modelo principal puede tardar más de un minuto
-export const config = { maxDuration: 60 };
+// La generación con el modelo principal puede tardar más de un minuto.
+// supportsResponseStreaming permite la respuesta SSE en Vercel.
+export const config = { maxDuration: 60, supportsResponseStreaming: true };
 
 // ─── Helpers KV ─────────────────────────────────────────────────────────────
 
@@ -182,9 +183,32 @@ IMPORTANTE: Usa esta investigación para crear un artículo que cubra los gaps i
 
 Genera el artículo completo siguiendo todas las instrucciones de estilo editorial. Recuerda consultar el historial de artículos existentes para asegurarte de que el enfoque es nuevo y diferenciado.`;
 
+  // 4096 tokens: un artículo "Largo" (~1200 palabras) + bloque meta ronda los
+  // 2000-2400 tokens en castellano; con 2048 se truncaba a media frase.
+
+  // ── Modo streaming (SSE): el dashboard pinta el artículo según se escribe ──
+  if (req.body.stream === true) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+    try {
+      for await (const delta of callAIStream({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096 })) {
+        send({ delta });
+      }
+      send({ done: true, historialCount: history.length });
+    } catch (err) {
+      console.error("AI generation error (stream):", err);
+      send({ error: "Error al generar el artículo. Inténtalo de nuevo." });
+    }
+    return res.end();
+  }
+
+  // ── Modo clásico (JSON completo) ──
   try {
-    // 4096 tokens: un artículo "Largo" (~1200 palabras) + bloque meta ronda los
-    // 2000-2400 tokens en castellano; con 2048 se truncaba a media frase.
     const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096 });
 
     return res.status(200).json({

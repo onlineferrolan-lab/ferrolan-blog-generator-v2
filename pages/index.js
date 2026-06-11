@@ -135,18 +135,60 @@ export default function Home() {
     setResearchLoading(false);
   };
 
+  // Generación en streaming (SSE): el artículo se pinta según Claude escribe.
+  // En cuanto llega el primer fragmento se salta a la vista de artículo.
   const generarArticulo = async () => {
     if (!tema || !categoria) { setError("Por favor, rellena el tema y la categoría."); return; }
     setError(""); setLoading(true); setArticulo(""); setImagenes([]); setImageError(""); setSaveSuccess(false); setPublishResult(null); setScheduleSuccess(false); setScheduleResult(null); setEnhanceResult(null);
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, provider,
+        tema, categoria, keywords, tono, contexto, publico, longitud, intencion, provider, stream: true,
         ...(psCategoria ? { nombreCategoriaPrestashop: psCategoria.split("|")[0], urlCategoriaPrestashop: psCategoria.split("|")[1] } : {}),
         ...(includeResearch && researchData ? { researchData } : {}),
       }) });
-      const data = await res.json();
-      if (data.articulo) { setArticulo(data.articulo); setActiveTab("preview"); setView("article"); }
-      else setError(data.error || "Error al generar el artículo.");
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Error al generar el artículo.");
+        setLoading(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let acc = "";
+      let firstChunk = true;
+      let streamError = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop(); // el último puede estar incompleto
+        for (const block of blocks) {
+          const line = block.trim();
+          if (!line.startsWith("data:")) continue;
+          let payload;
+          try { payload = JSON.parse(line.slice(5)); } catch { continue; }
+          if (payload.delta) {
+            acc += payload.delta;
+            if (firstChunk) {
+              setActiveTab("preview");
+              setView("article");
+              setLoading(false);
+              firstChunk = false;
+            }
+            setArticulo(acc);
+          } else if (payload.error) {
+            streamError = payload.error;
+          }
+        }
+      }
+
+      if (streamError) setError(streamError);
+      else if (!acc) setError("Error al generar el artículo. Inténtalo de nuevo.");
     } catch { setError("Error de conexión. Inténtalo de nuevo."); }
     setLoading(false);
   };
