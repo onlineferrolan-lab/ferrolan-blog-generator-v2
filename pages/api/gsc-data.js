@@ -5,6 +5,30 @@
 // Si no → datos estáticos del último análisis manual.
 
 import { google } from "googleapis";
+import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
+
+// Nivel de coincidencia para considerar un tema "ya cubierto":
+// "balanced" = exacta/contenida + solapamiento alto (≥60%).
+const COVERAGE_LEVEL = "balanced";
+
+// Anota Oportunidades y Nuevos temas con su cobertura (artículo existente).
+// NO se tocan Quick Wins ni "Artículos a revisar": ésos deben corresponder a
+// contenido ya publicado, así que filtrarlos los dejaría vacíos.
+async function annotatePayload(payload) {
+  try {
+    const index = await loadCoverageIndex();
+    if (index.length === 0) return payload;
+    if (Array.isArray(payload.oportunidades)) {
+      payload.oportunidades = annotateCoverage(payload.oportunidades, index, "query", COVERAGE_LEVEL);
+    }
+    if (Array.isArray(payload.nuevosTemasGSC)) {
+      payload.nuevosTemasGSC = annotateCoverage(payload.nuevosTemasGSC, index, "query", COVERAGE_LEVEL);
+    }
+  } catch (err) {
+    console.error("[gsc-data] coverage annotation skipped:", err.message);
+  }
+  return payload;
+}
 
 // ─── Datos estáticos (último análisis GSC: marzo 2026) ─────────────────────
 // Se usan como fallback si no hay credenciales de Google configuradas.
@@ -247,22 +271,22 @@ export default async function handler(req, res) {
     const liveData = await fetchLiveGSCData();
 
     if (liveData) {
-      return res.status(200).json(liveData);
+      return res.status(200).json(await annotatePayload(liveData));
     }
 
     // Fallback: datos estáticos
-    return res.status(200).json({
+    return res.status(200).json(await annotatePayload({
       live: false,
       ...STATIC_DATA,
-    });
+    }));
   } catch (err) {
     console.error("GSC data error:", err);
 
     // Si falla la API de Google, devolver datos estáticos
-    return res.status(200).json({
+    return res.status(200).json(await annotatePayload({
       live: false,
       error_detail: err.message,
       ...STATIC_DATA,
-    });
+    }));
   }
 }
