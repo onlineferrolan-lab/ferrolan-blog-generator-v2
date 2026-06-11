@@ -376,6 +376,7 @@ function BlockRenderer({ block, C }) {
 
 function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwData, kwLoading, onRefreshKW, onSelectTopic, syncMeta, C }) {
   const [tab, setTab] = useState("oportunidades");
+  const [ocultarCubiertos, setOcultarCubiertos] = useState(true);
   const [checkKw, setCheckKw] = useState("");
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkResult, setCheckResult] = useState(null);
@@ -428,8 +429,31 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
 
   const currentTab = TABS.find(t => t.key === tab);
 
-  const KWCardGSC = ({ item, bg, borderColor, hoverShadow, badge, badgeColor, badgeBg, extra }) => (
-    <button onClick={() => handleClickGSC(item)} style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+  // ── Filtrado por cobertura (temas ya cubiertos por artículos publicados) ──
+  // Solo aplica a las pestañas de "crear artículo nuevo".
+  const FILTRABLE = ["oportunidades", "sinCubrir", "sugeridas"];
+  const currentList =
+    tab === "oportunidades" ? (gscData?.oportunidades || [])
+    : tab === "sinCubrir"   ? (kwData?.sinCubrir || [])
+    : tab === "sugeridas"   ? (kwData?.sugeridas || [])
+    : [];
+  const coveredCount = currentList.filter((x) => x?.cubierto).length;
+  const visibleList = (list) => (ocultarCubiertos ? (list || []).filter((x) => !x?.cubierto) : (list || []));
+
+  // Nota visual para items cuyo tema ya está cubierto por un artículo publicado.
+  const CoveredNote = ({ cov }) => (
+    <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.5rem", paddingTop: "0.45rem", borderTop: `1px dashed ${C.border}` }}>
+      <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.15rem 0.45rem", borderRadius: 5, background: C.orangeLight, color: C.orange, border: `1px solid ${C.orange}40`, whiteSpace: "nowrap" }}>● Ya cubierto · {cov.matchType}</span>
+      {cov.url
+        ? <a href={cov.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "0.76rem", color: C.red, textDecoration: "none", fontWeight: 600, lineHeight: 1.3 }}>{cov.title} →</a>
+        : <span style={{ fontSize: "0.76rem", color: C.mid, fontWeight: 600 }}>{cov.title}</span>}
+    </div>
+  );
+
+  const KWCardGSC = ({ item, bg, borderColor, hoverShadow, badge, badgeColor, badgeBg, extra }) => {
+    const cov = item.cubierto ? item.articuloExistente : null;
+    return (
+    <button onClick={() => handleClickGSC(item)} style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${cov ? `${C.orange}55` : borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s", opacity: cov ? 0.62 : 1 }}
       onMouseOver={e => e.currentTarget.style.boxShadow = hoverShadow} onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
         <span style={{ fontSize: "0.95rem", fontWeight: 700, color: C.dark }}>{item.query}</span>
@@ -441,12 +465,16 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
         {item.ctr !== undefined && <span style={{ fontSize: "0.75rem", fontWeight: 700, color: C.orange, background: `${C.orange}18`, padding: "0.18rem 0.55rem", borderRadius: 20, border: `1px solid ${C.orange}30` }}>CTR {item.ctr}%</span>}
       </div>
       {extra && <div style={{ fontSize: "0.84rem", marginTop: "0.3rem", lineHeight: 1.4, ...extra.style }}>{extra.text}</div>}
+      {cov && <CoveredNote cov={cov} />}
     </button>
-  );
+    );
+  };
 
-  const KWCardPS = ({ item, bg, borderColor, hoverColor }) => (
+  const KWCardPS = ({ item, bg, borderColor, hoverColor }) => {
+    const cov = item.cubierto ? item.articuloExistente : null;
+    return (
     <button onClick={() => handleClickPS(item)}
-      style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s" }}
+      style={{ display: "block", width: "100%", textAlign: "left", background: bg, border: `1px solid ${cov ? `${C.orange}55` : borderColor}`, borderRadius: 10, padding: "0.85rem 1rem", cursor: "pointer", transition: "all 0.15s", opacity: cov ? 0.62 : 1 }}
       onMouseOver={e => e.currentTarget.style.boxShadow = `0 2px 12px ${hoverColor}20`}
       onMouseOut={e => e.currentTarget.style.boxShadow = "none"}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
@@ -458,8 +486,10 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
         {item.categoria_ps && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{item.categoria_ps}</span>}
         {item.razon && <span>· {item.razon}</span>}
       </div>
+      {cov && <CoveredNote cov={cov} />}
     </button>
-  );
+    );
+  };
 
   return (
     <div style={{ background: C.cardBg, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
@@ -518,6 +548,20 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
           <p style={{ fontSize: "0.82rem", color: C.muted, marginBottom: "0.75rem", lineHeight: 1.4 }}>{currentTab.desc}</p>
         )}
 
+        {/* ── Toggle: ocultar temas ya cubiertos ── */}
+        {FILTRABLE.includes(tab) && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.8rem", padding: "0.5rem 0.75rem", background: C.light, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            <span style={{ fontSize: "0.78rem", color: C.mid, fontWeight: 600 }}>
+              Ocultar temas ya cubiertos
+              {coveredCount > 0 && <span style={{ color: C.orange, fontWeight: 700 }}> · {coveredCount} detectado{coveredCount !== 1 ? "s" : ""}</span>}
+            </span>
+            <button onClick={() => setOcultarCubiertos(v => !v)} title={ocultarCubiertos ? "Mostrar los ya cubiertos (en gris)" : "Ocultar los ya cubiertos"}
+              style={{ width: 42, height: 23, borderRadius: 12, border: "none", cursor: "pointer", background: ocultarCubiertos ? C.red : C.border, position: "relative", flexShrink: 0, transition: "background 0.2s" }}>
+              <span style={{ position: "absolute", top: 2, left: ocultarCubiertos ? 21 : 2, width: 19, height: 19, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
+            </button>
+          </div>
+        )}
+
         {/* ── Loading / error states ── */}
         {(tab === "oportunidades" || tab === "quickwins" || tab === "articulos") && gscLoading && (
           <div style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
@@ -550,9 +594,16 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
         {/* ── Tab: Oportunidades GSC ── */}
         {tab === "oportunidades" && gscData && !gscLoading && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            {(gscData.oportunidades || []).map((item, i) => (
+            {visibleList(gscData.oportunidades).map((item, i) => (
               <KWCardGSC key={i} item={item} bg={C.cardBg} borderColor={C.border} hoverShadow={`0 2px 12px ${C.red}20`} badge={`pos ${item.posicion}`} badgeColor={posColor(item.posicion)} badgeBg={`${posColor(item.posicion)}18`} extra={item.sugerencia ? { text: `→ ${item.sugerencia}`, style: { color: C.mid, fontStyle: "italic" } } : null} />
             ))}
+            {visibleList(gscData.oportunidades).length === 0 && (
+              <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>
+                {ocultarCubiertos && (gscData.oportunidades || []).length > 0
+                  ? "Todas las oportunidades ya están cubiertas. Desactiva el filtro para verlas."
+                  : "Sin oportunidades disponibles."}
+              </div>
+            )}
           </div>
         )}
 
@@ -568,16 +619,16 @@ function OpportunitiesPanel({ gscData, gscLoading, gscError, onRefreshGSC, kwDat
         {/* ── Tab: Sin cubrir (Prestashop) ── */}
         {tab === "sinCubrir" && kwData?.resumen && !kwLoading && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            {(kwData.sinCubrir || []).map((item, i) => <KWCardPS key={i} item={item} bg={C.redLight} borderColor={C.redBorder} hoverColor={C.red} />)}
-            {(kwData.sinCubrir || []).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>Todas las categorías del catálogo tienen contenido</div>}
+            {visibleList(kwData.sinCubrir).map((item, i) => <KWCardPS key={i} item={item} bg={C.redLight} borderColor={C.redBorder} hoverColor={C.red} />)}
+            {visibleList(kwData.sinCubrir).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>{ocultarCubiertos && (kwData.sinCubrir || []).length > 0 ? "Todas las keywords sin cubrir ya tienen artículo. Desactiva el filtro para verlas." : "Todas las categorías del catálogo tienen contenido"}</div>}
           </div>
         )}
 
         {/* ── Tab: Sugeridas (Prestashop) ── */}
         {tab === "sugeridas" && kwData?.resumen && !kwLoading && (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            {(kwData.sugeridas || []).map((item, i) => <KWCardPS key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder} hoverColor={C.blue} />)}
-            {(kwData.sugeridas || []).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>No hay sugerencias adicionales</div>}
+            {visibleList(kwData.sugeridas).map((item, i) => <KWCardPS key={i} item={item} bg={C.blueLight} borderColor={C.blueBorder} hoverColor={C.blue} />)}
+            {visibleList(kwData.sugeridas).length === 0 && <div style={{ fontSize: "0.85rem", color: C.muted, textAlign: "center", padding: "1rem" }}>{ocultarCubiertos && (kwData.sugeridas || []).length > 0 ? "Todas las sugerencias ya están cubiertas. Desactiva el filtro para verlas." : "No hay sugerencias adicionales"}</div>}
           </div>
         )}
 
