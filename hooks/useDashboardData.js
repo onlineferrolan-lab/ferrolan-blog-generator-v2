@@ -56,6 +56,15 @@ export function useWpCategories() {
   return { wpCategories: Array.isArray(data) ? data : [] };
 }
 
+export function usePerformance() {
+  const { data, isLoading, mutate } = useSWR("/api/performance", fetcher, OPTS);
+  return {
+    performanceData: data || null,
+    performanceLoading: isLoading,
+    refreshPerformance: () => fetch("/api/performance?refresh=true").then((r) => r.json()).then((d) => mutate(d, false)),
+  };
+}
+
 // Keywords (Prestashop × GSC × Claude): NO se carga en el mount — consume
 // tokens. Se dispara manualmente desde el botón "Analizar keywords".
 export function useKeywordsData() {

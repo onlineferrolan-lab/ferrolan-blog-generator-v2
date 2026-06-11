@@ -27,6 +27,8 @@ import { SavedArticlesPanel } from "../components/SavedArticlesPanel";
 import { ScheduledList } from "../components/ScheduledList";
 import { SEOPanel } from "../components/SEOPanel";
 import { EnhancePanel } from "../components/EnhancePanel";
+import { EditorialCalendar } from "../components/EditorialCalendar";
+import { PerformancePanel } from "../components/PerformancePanel";
 
 import {
   useGSC,
@@ -38,6 +40,7 @@ import {
   usePsCategories,
   useWpCategories,
   useKeywordsData,
+  usePerformance,
 } from "../hooks/useDashboardData";
 
 export default function Home() {
@@ -107,6 +110,7 @@ export default function Home() {
   const { psCategories } = usePsCategories();
   const { wpCategories } = useWpCategories();
   const { kwData, kwLoading, fetchKeywords } = useKeywordsData();
+  const { performanceData, performanceLoading, refreshPerformance } = usePerformance();
 
   const C = isDark ? DARK_THEME : LIGHT;
 
@@ -389,6 +393,7 @@ export default function Home() {
         @media (max-width: 1200px) {
           .main-grid { grid-template-columns: 1fr !important; }
           .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
+          .bottom-row { grid-template-columns: 1fr !important; }
         }
         @keyframes slideIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
         .article-view { animation: slideIn 0.3s ease; }
@@ -625,6 +630,12 @@ export default function Home() {
             data={evergreenData} loading={evergreenLoading} onRefresh={refreshEvergreen}
             onSelectTopic={handleSelectTopic} C={C}
           />
+        </div>
+
+        {/* ─── FILA INFERIOR: Calendario editorial + Rendimiento ─── */}
+        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }} className="bottom-row">
+          <EditorialCalendar scheduledArticles={scheduledArticles} savedArticles={savedArticles} C={C} />
+          <PerformancePanel data={performanceData} loading={performanceLoading} onRefresh={refreshPerformance} C={C} />
         </div>
 
         {/* Loading overlay inside panels view */}
