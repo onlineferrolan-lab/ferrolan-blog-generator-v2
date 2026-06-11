@@ -57,7 +57,7 @@ Máximo 4 enlaces. Solo URLs de ferrolan.es. Solo anchor texts descriptivos, nun
 **Artículo:**
 ${articulo}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536, cacheSystem: true });
   try {
     return parseLLMJson(raw);
   } catch {
@@ -102,7 +102,7 @@ Genera exactamente 5 titulares alternativos. Máximo 70 caracteres cada uno. Key
 **Artículo:**
 ${articulo.slice(0, 2000)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536, cacheSystem: true });
   try {
     return parseLLMJson(raw);
   } catch {
@@ -158,7 +158,7 @@ Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
 **Artículo completo:**
 ${articulo.slice(0, 4000)}`;
 
-  const raw = await callAI({ provider, tier: "analysis", systemPrompt, userPrompt, maxTokens: 2048 });
+  const raw = await callAI({ provider, tier: "analysis", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
     return parseLLMJson(raw);
   } catch {
@@ -209,7 +209,7 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
     return parseLLMJson(raw);
   } catch {
@@ -260,7 +260,7 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
     return parseLLMJson(raw);
   } catch {

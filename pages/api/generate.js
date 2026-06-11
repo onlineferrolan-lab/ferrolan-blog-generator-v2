@@ -84,38 +84,41 @@ Al final del artículo (después de una línea ---), añade un bloque con:
 
 IMPORTANTE: Responde ÚNICAMENTE con el artículo en formato Markdown. Sin explicaciones previas ni comentarios.`;
 
-// Construye el system prompt completo:
-// 1. Rol + intro
-// 2. Documentos de contexto reales (brand-voice, seo, links, style)
-// 3. Estructura y adaptaciones
-// 4. Historial de artículos publicados (anti-duplicados)
-function buildSystemPrompt(history, contextBlock) {
-  const parts = [ROLE_INTRO];
+// Máximo de artículos del historial que se inyectan en el prompt.
+// Sin límite, el prompt crecía sin tope con la vida del blog (coste + latencia).
+const HISTORY_PROMPT_LIMIT = 100;
 
+// Bloque ESTÁTICO del system prompt: rol + documentos de contexto + estructura.
+// Es idéntico entre llamadas → se marca cacheable (prompt caching de Anthropic).
+function buildStaticSystemBlock(contextBlock) {
+  const parts = [ROLE_INTRO];
   if (contextBlock) {
     parts.push(`\n\n# DOCUMENTOS DE REFERENCIA OBLIGATORIA\n\n${contextBlock}`);
   }
-
   parts.push(SECTIONS_AND_STRUCTURE);
+  return parts.join("");
+}
 
-  if (history && history.length > 0) {
-    const historialTexto = history
-      .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
-      .join("\n");
+// Bloque VARIABLE: historial de artículos publicados (anti-duplicados).
+// Limitado a los más recientes — los antiguos aportan poco para evitar repetir.
+function buildHistoryBlock(history) {
+  if (!history || history.length === 0) return null;
 
-    parts.push(`\n\nHISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
-A continuación se listan todos los artículos que ya existen en el blog. Debes tenerlos en cuenta para:
+  const shown = history.slice(0, HISTORY_PROMPT_LIMIT);
+  const historialTexto = shown
+    .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
+    .join("\n");
+
+  return `HISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
+A continuación se listan los artículos más recientes del blog. Debes tenerlos en cuenta para:
 1. NO repetir temas ya cubiertos — aborda el tema desde un ángulo diferente o más específico.
 2. NO repetir el mismo enfoque o estructura que artículos previos de la misma categoría.
 3. Puedes hacer referencias internas a artículos existentes usando el slug como ruta del enlace.
 
-ARTÍCULOS EXISTENTES (${history.length} en total):
+ARTÍCULOS EXISTENTES (${shown.length} más recientes de ${history.length} en total):
 ${historialTexto}
 
-Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`);
-  }
-
-  return parts.join("");
+Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`;
 }
 
 // ─── Handler principal ───────────────────────────────────────────────────────
@@ -151,10 +154,16 @@ export default async function handler(req, res) {
   // 1. Recuperar historial de KV (no bloquea si falla)
   const history = await getArticleHistory();
 
-  // 2. Cargar contexto de marca desde /context/ e inyectarlo en el system prompt
+  // 2. Cargar contexto de marca desde /context/ e inyectarlo en el system prompt.
+  // El bloque estático (rol + contexto + estructura) va cacheado; el historial
+  // cambia con cada artículo guardado y va en un bloque aparte sin cachear.
   const contextFiles = loadGenerationContext();
   const contextBlock = buildContextBlock(contextFiles);
-  const systemPrompt = buildSystemPrompt(history, contextBlock);
+  const historyBlock = buildHistoryBlock(history);
+  const systemPrompt = [
+    { text: buildStaticSystemBlock(contextBlock), cache: true },
+    ...(historyBlock ? [{ text: historyBlock }] : []),
+  ];
 
   const userPrompt = `Escribe un artículo de blog para Ferrolan con las siguientes características:
 
