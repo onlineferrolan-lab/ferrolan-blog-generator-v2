@@ -62,6 +62,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("preview");
   const [view, setView] = useState("panels"); // "panels" | "article"
+  const [panelTab, setPanelTab] = useState("crear"); // "crear" | "agenda"
 
   // ── Research ──
   const [researchData, setResearchData] = useState(null);
@@ -393,7 +394,7 @@ export default function Home() {
         @media (max-width: 1200px) {
           .main-grid { grid-template-columns: 1fr !important; }
           .form-sticky, .gsc-sticky { position: relative !important; top: 0 !important; }
-          .bottom-row { grid-template-columns: 1fr !important; }
+          .plan-grid { grid-template-columns: 1fr !important; }
         }
         @keyframes slideIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
         .article-view { animation: slideIn 0.3s ease; }
@@ -423,7 +424,21 @@ export default function Home() {
 
       {/* ═══  VIEW: PANELS (dashboard principal)  ═══ */}
       {view === "panels" && (
-      <div className="main-grid" style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
+      <div style={{ maxWidth: 1920, margin: "0 auto", padding: "1.5rem 2rem" }}>
+
+        {/* ─── Sub-navegación: Crear / Agenda ─── */}
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+          {[["crear", "✍ Crear contenido"], ["agenda", "📊 Agenda y rendimiento"]].map(([key, label]) => (
+            <button key={key} onClick={() => setPanelTab(key)}
+              style={{ padding: "0.6rem 1.4rem", borderRadius: 10, border: `1px solid ${panelTab === key ? C.red : C.border}`, background: panelTab === key ? C.red : C.cardBg, color: panelTab === key ? "#FFF" : C.mid, fontSize: "0.85rem", cursor: "pointer", fontFamily: "'Oswald', sans-serif", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", transition: "all 0.15s" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ═══ Sección: CREAR (formulario + oportunidades + evergreen) ═══ */}
+        {panelTab === "crear" && (
+        <div className="main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
 
         {/* ─── LEFT: FORM ─── */}
         <div className="form-column form-sticky" style={{ position: "sticky", top: "1.5rem", alignSelf: "start", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}>
@@ -632,11 +647,16 @@ export default function Home() {
           />
         </div>
 
-        {/* ─── FILA INFERIOR: Calendario editorial + Rendimiento ─── */}
-        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }} className="bottom-row">
+        </div>
+        )}
+
+        {/* ═══ Sección: AGENDA Y RENDIMIENTO (calendario + GSC) ═══ */}
+        {panelTab === "agenda" && (
+        <div className="plan-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
           <EditorialCalendar scheduledArticles={scheduledArticles} savedArticles={savedArticles} C={C} />
           <PerformancePanel data={performanceData} loading={performanceLoading} onRefresh={refreshPerformance} C={C} />
         </div>
+        )}
 
         {/* Loading overlay inside panels view */}
         {loading && (
