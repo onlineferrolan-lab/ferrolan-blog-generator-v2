@@ -1,5 +1,6 @@
-import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord, deleteArticleRecord } from "../../lib/article-store";
+import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Save Article API ──────────────────────────────────────────────────────
 // Solo guarda artículos que el usuario decide publicar explícitamente.
@@ -9,11 +10,18 @@ import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "
 export default async function handler(req, res) {
   // ─── POST: Guardar artículo ───
   if (req.method === "POST") {
-    const { tema, categoria, keywords, tono, articulo } = req.body;
-
-    if (!articulo || !tema) {
-      return res.status(400).json({ error: "Faltan datos del artículo" });
+    const validationError = validateBody(req.body, {
+      articulo: { required: true, max: MAX.articulo },
+      tema: { required: true, max: MAX.tema },
+      keywords: { max: MAX.keywords },
+      categoria: { max: MAX.corto },
+      tono: { max: MAX.corto },
+    });
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
     }
+
+    const { tema, categoria, keywords, tono, articulo } = req.body;
 
     try {
       const id = `article:${Date.now()}`;
@@ -32,8 +40,7 @@ export default async function handler(req, res) {
         contenido: articulo,
       };
 
-      await kv.set(id, JSON.stringify(entry));
-      await kv.lpush("articles:index", id);
+      await saveArticleRecord(entry);
 
       return res.status(200).json({ saved: true, id, entry: { ...entry, contenido: undefined } });
     } catch (err) {
@@ -51,8 +58,7 @@ export default async function handler(req, res) {
     }
 
     try {
-      await kv.del(id);
-      await kv.lrem("articles:index", 0, id);
+      await deleteArticleRecord(id);
       return res.status(200).json({ deleted: true, id });
     } catch (err) {
       console.error("KV delete error:", err);

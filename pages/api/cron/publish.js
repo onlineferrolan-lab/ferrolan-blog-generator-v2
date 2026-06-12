@@ -1,9 +1,19 @@
-import { kv } from "@vercel/kv";
+import { verifyCronRequest } from "../../../lib/cron-auth";
+import { getScheduledMeta, getFullRecord, updateScheduledRecord } from "../../../lib/article-store";
+import { uploadEmbeddedImagesToWP, findDataUrlImages } from "../../../lib/wp-media";
+import { markdownToHtml } from "../../../lib/markdown-to-html";
+
+// Puede publicar varios artículos pendientes en una misma ejecución
+export const config = { maxDuration: 60 };
 
 // ─── Cron: Auto-publish scheduled articles to WordPress ────────────────────
-// Ejecutado por Vercel Cron cada hora (configurable en vercel.json).
+// Ejecutado por Vercel Cron a diario a las 9:00 (configurable en vercel.json).
 // Comprueba si hay artículos programados cuya fecha ya ha pasado
 // y los publica en WordPress via REST API.
+//
+// Seguridad: el middleware deja pasar /api/cron/* sin cookie, así que este
+// handler EXIGE el header "Authorization: Bearer CRON_SECRET" que Vercel
+// añade automáticamente cuando la variable CRON_SECRET está definida.
 
 async function publishToWordPress(entry) {
   const wpUrl = process.env.WORDPRESS_URL; // ej: https://ferrolan.es
@@ -14,11 +24,25 @@ async function publishToWordPress(entry) {
     throw new Error("WordPress credentials not configured");
   }
 
-  const apiUrl = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2/posts`;
+  const apiBase = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
+  const apiUrl = `${apiBase}/posts`;
+  const authHeader = "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64");
+
+  // Si el markdown programado lleva imágenes IA embebidas (base64), subirlas
+  // a la media library y regenerar el HTML con las URLs reales.
+  let contenidoHtml = entry.contenidoHtml;
+  if (entry.contenidoMarkdown && findDataUrlImages(entry.contenidoMarkdown).length > 0) {
+    const { markdown } = await uploadEmbeddedImagesToWP(entry.contenidoMarkdown, {
+      apiUrl: apiBase,
+      authHeader,
+      slug: entry.slug,
+    });
+    contenidoHtml = markdownToHtml(markdown);
+  }
 
   const postData = {
     title: entry.titulo,
-    content: entry.contenidoHtml,
+    content: contenidoHtml,
     status: "publish",
     slug: entry.slug || undefined,
     excerpt: entry.metaDescription || undefined,
@@ -31,7 +55,7 @@ async function publishToWordPress(entry) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64"),
+      Authorization: authHeader,
     },
     body: JSON.stringify(postData),
   });
@@ -52,38 +76,32 @@ async function publishToWordPress(entry) {
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  // Verificar que es una llamada legítima del cron
-  // Vercel envía el header Authorization con CRON_SECRET
-  const authHeader = req.headers.authorization;
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized" });
+  // Verificar que es una llamada legítima del cron (CRON_SECRET obligatorio)
+  const auth = verifyCronRequest(req.headers.authorization, process.env.CRON_SECRET);
+  if (!auth.ok) {
+    return res.status(auth.status).json({ error: auth.error });
   }
 
   const now = new Date();
   const results = { checked: 0, published: 0, failed: 0, errors: [] };
 
   try {
-    // Obtener todos los artículos programados
-    const ids = await kv.lrange("scheduled:index", 0, -1);
-    if (!ids || ids.length === 0) {
+    // Metadatos de todos los programados (un solo comando KV)
+    const metas = await getScheduledMeta();
+    if (metas.length === 0) {
       return res.status(200).json({ message: "No scheduled articles", ...results });
     }
+    results.checked = metas.length;
 
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
+    // Solo los "scheduled" cuya fecha ya pasó necesitan el registro completo
+    const due = metas.filter(
+      (m) => m.status === "scheduled" && m.publishDate && new Date(m.publishDate) <= now
+    );
 
-    for (let i = 0; i < records.length; i++) {
-      const raw = records[i];
-      if (!raw) continue;
-
-      const entry = typeof raw === "string" ? JSON.parse(raw) : raw;
-      results.checked++;
-
-      // Solo procesar artículos con status "scheduled"
-      if (entry.status !== "scheduled") continue;
-
-      // Comprobar si la fecha de publicación ya pasó
-      const publishTime = new Date(entry.publishDate);
-      if (publishTime > now) continue; // Aún no es la hora
+    for (const meta of due) {
+      // Cargar el registro completo (con contenidoHtml) solo para los que tocan
+      const entry = await getFullRecord(meta.id);
+      if (!entry) continue;
 
       // ¡Es hora de publicar!
       try {
@@ -94,7 +112,7 @@ export default async function handler(req, res) {
         entry.wpPostId = wpResult.id;
         entry.wpLink = wpResult.link;
         entry.publishedAt = now.toISOString();
-        await kv.set(entry.id, JSON.stringify(entry));
+        await updateScheduledRecord(entry);
 
         results.published++;
         console.log(`✅ Published: "${entry.titulo}" → ${wpResult.link}`);
@@ -103,7 +121,7 @@ export default async function handler(req, res) {
         entry.status = "failed";
         entry.error = pubErr.message;
         entry.failedAt = now.toISOString();
-        await kv.set(entry.id, JSON.stringify(entry));
+        await updateScheduledRecord(entry);
 
         results.failed++;
         results.errors.push({ id: entry.id, titulo: entry.titulo, error: pubErr.message });

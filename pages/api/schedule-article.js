@@ -1,7 +1,11 @@
-import { kv } from "@vercel/kv";
 import { google } from "googleapis";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord, saveScheduledRecord } from "../../lib/article-store";
 import { markdownToHtml } from "../../lib/markdown-to-html";
+import { validateBody, MAX } from "../../lib/validate";
+import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
+
+export const config = { maxDuration: 60 };
 
 // ─── Schedule Article API ──────────────────────────────────────────────────
 // 1. Calcula el próximo martes o jueves disponible
@@ -21,13 +25,9 @@ async function getSheetName(sheets, spreadsheetId) {
 }
 
 function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !key) throw new Error("Google Service Account not configured");
-
-  return new google.auth.JWT(email, null, key.replace(/\\n/g, "\n"), [
-    "https://www.googleapis.com/auth/spreadsheets",
-  ]);
+  const auth = getGoogleAuth([SCOPES.sheets]);
+  if (!auth) throw new Error("Google Service Account not configured");
+  return auth;
 }
 
 // Buscar la última fila ocupada a partir de SHEET_START_ROW
@@ -129,7 +129,8 @@ export default async function handler(req, res) {
         dayName: nextDate.getDay() === 2 ? "Martes" : "Jueves",
       });
     } catch (err) {
-      return res.status(200).json({ nextDate: null, error: err.message });
+      console.error("Next slot error:", err);
+      return res.status(200).json({ nextDate: null, error: "No se pudo calcular el próximo hueco disponible" });
     }
   }
 
@@ -137,11 +138,18 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, articulo } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "Faltan datos: tema y artículo son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+    tono: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, articulo } = req.body;
 
   const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
   if (!spreadsheetId) {
@@ -199,12 +207,11 @@ export default async function handler(req, res) {
       contenidoHtml: htmlContent,
     };
 
-    await kv.set(id, JSON.stringify(entry));
-    await kv.lpush("scheduled:index", id);
+    await saveScheduledRecord(entry);
 
     // 6. También guardar en historial general para que Claude no repita temas
     const articleId = `article:${Date.now()}`;
-    await kv.set(articleId, JSON.stringify({
+    await saveArticleRecord({
       id: articleId,
       tema,
       categoria: categoria || "",
@@ -214,8 +221,7 @@ export default async function handler(req, res) {
       tags: extractTags(articulo),
       fecha: new Date().toISOString().split("T")[0],
       contenido: articulo,
-    }));
-    await kv.lpush("articles:index", articleId);
+    });
 
     return res.status(200).json({
       scheduled: true,
@@ -227,7 +233,8 @@ export default async function handler(req, res) {
       blogUrl,
     });
   } catch (err) {
+    // El detalle (Google Sheets API incluida) queda en logs
     console.error("Schedule error:", err);
-    return res.status(500).json({ error: "Error al programar: " + err.message });
+    return res.status(500).json({ error: "Error al programar el artículo. Revisa los logs del servidor." });
   }
 }

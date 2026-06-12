@@ -1,8 +1,10 @@
-import { kv } from "@vercel/kv";
+import { getArticlesMeta } from "../../lib/article-store";
 
 // ─── Articles List API ─────────────────────────────────────────────────────
-// Devuelve todos los artículos publicados, ordenados por fecha (más recientes primero).
-// Usado por el frontend para mostrar el historial y por generate.js para evitar repetir temas.
+// Devuelve los artículos publicados, ordenados por fecha (más recientes primero).
+// Usado por el frontend para mostrar el historial.
+// Paginación opcional: ?limit=20&offset=0 (sin parámetros devuelve todos,
+// como hasta ahora). "total" siempre es el total real.
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -10,36 +12,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const ids = await kv.lrange("articles:index", 0, -1);
+    const metas = await getArticlesMeta();
 
-    if (!ids || ids.length === 0) {
-      return res.status(200).json({ articles: [], total: 0 });
-    }
-
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-
-    const articles = records
-      .filter(Boolean)
-      .map((r) => {
-        const parsed = typeof r === "string" ? JSON.parse(r) : r;
-        // No devolvemos el contenido completo en el listado para ahorrar ancho de banda
-        return {
-          id: parsed.id,
-          tema: parsed.tema,
-          titulo: parsed.titulo,
-          categoria: parsed.categoria,
-          keywords: parsed.keywords,
-          slug: parsed.slug,
-          tags: parsed.tags,
-          fecha: parsed.fecha,
-          wpStatus: parsed.wpStatus || null,
-        };
-      })
+    const all = metas
+      .map((parsed) => ({
+        id: parsed.id,
+        tema: parsed.tema,
+        titulo: parsed.titulo,
+        categoria: parsed.categoria,
+        keywords: parsed.keywords,
+        slug: parsed.slug,
+        tags: parsed.tags,
+        fecha: parsed.fecha,
+        wpStatus: parsed.wpStatus || null,
+      }))
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
-    return res.status(200).json({ articles, total: articles.length });
+    const limit = parseInt(req.query.limit, 10);
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const articles = Number.isFinite(limit) && limit > 0 ? all.slice(offset, offset + limit) : all;
+
+    return res.status(200).json({ articles, total: all.length });
   } catch (err) {
     console.error("KV fetch error:", err);
-    return res.status(200).json({ articles: [], total: 0, error: err.message });
+    return res.status(200).json({ articles: [], total: 0, error: "No se pudo cargar el historial" });
   }
 }

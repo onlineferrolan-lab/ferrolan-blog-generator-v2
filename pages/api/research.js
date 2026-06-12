@@ -1,6 +1,10 @@
 import { callAI } from "../../lib/ai-client";
-import { kv } from "@vercel/kv";
-import { normalizeKeyword, normalizeSlug, matchType } from "../../lib/keyword-utils";
+import { normalizeKeyword } from "../../lib/keyword-utils";
+import { loadCoverageIndex, findAllConflicts } from "../../lib/coverage";
+import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
+
+export const config = { maxDuration: 60 };
 
 // ─── Research API ─────────────────────────────────────────────────────────────
 // Analiza el panorama competitivo para un tema dado usando Claude.
@@ -37,60 +41,15 @@ Estructura exacta del JSON:
 }`;
 
 // ─── Keyword availability check (inline, sin HTTP extra) ─────────────────────
+// Reutiliza el índice de cobertura compartido (lib/coverage + lib/article-store).
 async function checkKeywordAvailability(keyword) {
-  if (!keyword) return { available: true, conflicts: [] };
-  const normalizedKw = normalizeKeyword(keyword);
-  if (!normalizedKw) return { available: true, conflicts: [] };
+  if (!keyword || !normalizeKeyword(keyword)) {
+    return { available: true, conflicts: [] };
+  }
 
   try {
-    const [kvIds, wpIds] = await Promise.all([
-      kv.lrange("articles:index", 0, -1),
-      kv.lrange("wp:posts:index", 0, -1),
-    ]);
-
-    const [kvRecordsRaw, wpRecordsRaw] = await Promise.all([
-      kvIds.length > 0 ? Promise.all(kvIds.map((id) => kv.get(id))) : Promise.resolve([]),
-      wpIds.length > 0 ? Promise.all(wpIds.map((id) => kv.get(`wp:post:${id}`))) : Promise.resolve([]),
-    ]);
-
-    const conflicts = [];
-
-    for (const raw of kvRecordsRaw) {
-      if (!raw) continue;
-      const article = typeof raw === "string" ? JSON.parse(raw) : raw;
-      const fields = [
-        normalizeKeyword(article.titulo || ""),
-        normalizeSlug(article.slug || ""),
-        normalizeKeyword(article.keywords || ""),
-        normalizeKeyword(article.tema || ""),
-      ];
-      let best = null;
-      for (const f of fields) {
-        const mt = matchType(normalizedKw, f);
-        if (mt && (!best || mt === "exact" || (mt === "contains" && best !== "exact"))) best = mt;
-      }
-      if (best) {
-        conflicts.push({ title: article.titulo || article.tema || "Sin título", slug: article.slug || "", source: "kv", matchType: best, date: article.fecha || "" });
-      }
-    }
-
-    for (const raw of wpRecordsRaw) {
-      if (!raw) continue;
-      const post = typeof raw === "string" ? JSON.parse(raw) : raw;
-      const fields = [normalizeKeyword(post.title || ""), normalizeSlug(post.slug || "")];
-      let best = null;
-      for (const f of fields) {
-        const mt = matchType(normalizedKw, f);
-        if (mt && (!best || mt === "exact" || (mt === "contains" && best !== "exact"))) best = mt;
-      }
-      if (best) {
-        conflicts.push({ title: post.title || post.slug || "Sin título", slug: post.slug || "", url: post.link || null, source: "wordpress", matchType: best, date: post.date ? post.date.slice(0, 10) : "" });
-      }
-    }
-
-    const order = { exact: 0, contains: 1, overlap: 2 };
-    conflicts.sort((a, b) => (order[a.matchType] || 2) - (order[b.matchType] || 2));
-
+    const index = await loadCoverageIndex();
+    const conflicts = findAllConflicts(keyword, index);
     return { available: conflicts.length === 0, conflicts };
   } catch {
     return { available: true, conflicts: [], error: "No se pudo verificar la BBDD de keywords" };
@@ -102,11 +61,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, contexto, provider = "anthropic" } = req.body;
-
-  if (!tema) {
-    return res.status(400).json({ error: "El tema es obligatorio para investigar." });
+  const validationError = validateBody(req.body, {
+    tema: { required: true, max: MAX.tema },
+    categoria: { max: MAX.corto },
+    keywords: { max: MAX.keywords },
+    contexto: { max: MAX.contexto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, contexto, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
@@ -132,19 +97,12 @@ Devuelve el análisis competitivo en formato JSON.`;
       checkKeywordAvailability(kwToCheck),
     ]);
 
-    // Parse JSON response — limpiar por si Claude envuelve en markdown
-    const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const data = JSON.parse(cleaned);
+    const data = parseLLMJson(text);
 
     return res.status(200).json({ ...data, keywordCheck });
   } catch (err) {
+    // El detalle queda en logs; al cliente solo un mensaje genérico
     console.error("Research API error:", err);
-
-    if (err instanceof SyntaxError) {
-      return res.status(500).json({ error: "Error al procesar la investigación. Inténtalo de nuevo." });
-    }
-
-    const msg = err?.message || err?.error?.message || "Error desconocido";
-    return res.status(500).json({ error: `Error al investigar: ${msg}` });
+    return res.status(500).json({ error: "Error al investigar el tema. Inténtalo de nuevo." });
   }
 }

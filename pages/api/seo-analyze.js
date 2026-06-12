@@ -1,7 +1,11 @@
 import { callAI } from "../../lib/ai-client";
+import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
 
 // ─── SEO Analyze API ──────────────────────────────────────────────────────────
 // Analiza un artículo generado y devuelve un informe SEO estructurado.
+
+export const config = { maxDuration: 60 };
 
 const SEO_SYSTEM_PROMPT = `Eres un especialista senior en SEO para contenido de construcción, reforma del hogar, cerámica, baño, cocina, parquet, ferretería y jardinería en España.
 
@@ -49,11 +53,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
-
-  if (!articulo) {
-    return res.status(400).json({ error: "El artículo es obligatorio para analizar." });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { max: MAX.tema },
+    keywords: { max: MAX.keywords },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { articulo, tema, keywords, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
@@ -74,25 +83,7 @@ Devuelve el informe SEO en formato JSON.`;
 
   try {
     const text = await callAI({ provider, tier: "analysis", systemPrompt: SEO_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
-
-    // Extracción robusta del JSON — maneja markdown fences, texto previo y JSON truncado
-    let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const jsonStart = cleaned.indexOf("{");
-    const jsonEnd   = cleaned.lastIndexOf("}");
-    if (jsonStart !== -1 && jsonEnd !== -1) cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
-
-    let data;
-    try {
-      data = JSON.parse(cleaned);
-    } catch {
-      // Intentar reparar JSON truncado cerrando llaves y corchetes abiertos
-      let repaired = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "").replace(/,\s*$/, "");
-      const opens  = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
-      const bracks = (repaired.match(/\{/g) || []).length - (repaired.match(/\}/g) || []).length;
-      for (let i = 0; i < opens;  i++) repaired += "]";
-      for (let i = 0; i < bracks; i++) repaired += "}";
-      data = JSON.parse(repaired);
-    }
+    const data = parseLLMJson(text);
 
     return res.status(200).json(data);
   } catch (err) {

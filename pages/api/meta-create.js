@@ -1,7 +1,11 @@
 import { callAI } from "../../lib/ai-client";
+import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
 
 // ─── Meta Creator API ─────────────────────────────────────────────────────────
 // Genera opciones de meta título y descripción para un artículo de Ferrolan.
+
+export const config = { maxDuration: 60 };
 
 const META_SYSTEM_PROMPT = `Eres un copywriter de conversión especializado en meta títulos y meta descripciones para SEO en España.
 
@@ -49,6 +53,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const validationError = validateBody(req.body, {
+    articulo: { max: MAX.articulo },
+    tema: { max: MAX.tema },
+    keywords: { max: MAX.keywords },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
   const { articulo, tema, keywords, provider = "anthropic" } = req.body;
 
   if (!tema && !articulo) {
@@ -78,8 +91,7 @@ Responde con el JSON de las 3 opciones.`;
 
   try {
     const text = await callAI({ provider, tier: "fast", systemPrompt: META_SYSTEM_PROMPT, userPrompt, maxTokens: 1024 });
-    const cleaned = text.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
-    const data = JSON.parse(cleaned);
+    const data = parseLLMJson(text);
 
     return res.status(200).json(data);
   } catch (err) {

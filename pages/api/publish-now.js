@@ -1,20 +1,30 @@
-import { kv } from "@vercel/kv";
 import { extractSlug, extractTitle, extractMetaDescription, extractTags } from "../../lib/article-utils";
+import { saveArticleRecord } from "../../lib/article-store";
 import { markdownToHtml } from "../../lib/markdown-to-html";
+import { uploadEmbeddedImagesToWP } from "../../lib/wp-media";
+import { validateBody, MAX } from "../../lib/validate";
 
 // ─── Publish Now API ────────────────────────────────────────────────────────
 // Sube un artículo a WordPress como BORRADOR para revisión final.
+
+export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, articulo, wpCategoryId } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "Faltan datos: tema y artículo son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, articulo, wpCategoryId } = req.body;
 
   const wpUrl = process.env.WORDPRESS_URL;
   const wpUser = process.env.WORDPRESS_USER;
@@ -29,10 +39,15 @@ export default async function handler(req, res) {
     const slug = extractSlug(articulo);
     const metaDescription = extractMetaDescription(articulo);
     const tags = extractTags(articulo);
-    const htmlContent = markdownToHtml(articulo);
 
     const apiUrl = `${wpUrl.replace(/\/$/, "")}/wp-json/wp/v2`;
     const authHeader = "Basic " + Buffer.from(`${wpUser}:${wpAppPassword}`).toString("base64");
+
+    // 0. Subir las imágenes IA embebidas (base64) a la media library de WP
+    //    y sustituirlas por sus URLs reales antes de convertir a HTML.
+    const { markdown: articuloConMedia, uploaded: mediaUploaded } =
+      await uploadEmbeddedImagesToWP(articulo, { apiUrl, authHeader, slug });
+    const htmlContent = markdownToHtml(articuloConMedia);
 
     // 1. Resolver tags
     let tagIds = [];
@@ -91,7 +106,7 @@ export default async function handler(req, res) {
 
     // 3. Guardar en historial de artículos para que Claude no repita
     const articleId = `article:${Date.now()}`;
-    await kv.set(articleId, JSON.stringify({
+    await saveArticleRecord({
       id: articleId,
       tema,
       categoria: categoria || "",
@@ -100,12 +115,11 @@ export default async function handler(req, res) {
       slug,
       tags,
       fecha: new Date().toISOString().split("T")[0],
-      contenido: articulo,
+      contenido: articuloConMedia,
       wpPostId: wpPost.id,
       wpLink: wpPost.link,
       wpStatus: "draft",
-    }));
-    await kv.lpush("articles:index", articleId);
+    });
 
     return res.status(200).json({
       published: true,
@@ -113,10 +127,12 @@ export default async function handler(req, res) {
       wpLink: wpPost.link,
       wpEditLink: `${wpUrl.replace(/\/$/, "")}/wp-admin/post.php?post=${wpPost.id}&action=edit`,
       titulo,
+      mediaUploaded,
       status: "draft",
     });
   } catch (err) {
+    // El detalle (respuesta cruda de WordPress incluida) queda en logs
     console.error("Publish error:", err);
-    return res.status(500).json({ error: "Error al subir borrador: " + err.message });
+    return res.status(500).json({ error: "Error al subir el borrador a WordPress. Revisa los logs del servidor." });
   }
 }

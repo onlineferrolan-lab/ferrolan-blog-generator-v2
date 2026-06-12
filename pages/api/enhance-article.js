@@ -2,6 +2,11 @@ import { callAI } from "../../lib/ai-client";
 import fs from "fs";
 import path from "path";
 import { loadAgentContext } from "../../lib/context-loader";
+import { validateBody, MAX } from "../../lib/validate";
+import { parseLLMJson } from "../../lib/llm-json";
+
+// 5 agentes en paralelo sobre el artículo completo
+export const config = { maxDuration: 60 };
 
 // ─── Agent definition loader ─────────────────────────────────────────────────
 
@@ -52,10 +57,9 @@ Máximo 4 enlaces. Solo URLs de ferrolan.es. Solo anchor texts descriptivos, nun
 **Artículo:**
 ${articulo}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
-  const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536, cacheSystem: true });
   try {
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
     throw new Error("Respuesta del agente de enlaces no es JSON válido");
   }
@@ -98,10 +102,9 @@ Genera exactamente 5 titulares alternativos. Máximo 70 caracteres cada uno. Key
 **Artículo:**
 ${articulo.slice(0, 2000)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536 });
-  const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 1536, cacheSystem: true });
   try {
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
     throw new Error("Respuesta del agente de titulares no es JSON válido");
   }
@@ -155,24 +158,10 @@ Status posibles: "ok" | "low" | "high". Types: "error" | "warning" | "info".`;
 **Artículo completo:**
 ${articulo.slice(0, 4000)}`;
 
-  const raw = await callAI({ provider, tier: "analysis", systemPrompt, userPrompt, maxTokens: 2048 });
-
-  // Extracción robusta del JSON — maneja markdown fences y texto previo
-  let cleaned = raw.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  const jsonStart = cleaned.indexOf("{");
-  const jsonEnd   = cleaned.lastIndexOf("}");
-  if (jsonStart !== -1 && jsonEnd !== -1) cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
-
+  const raw = await callAI({ provider, tier: "analysis", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
-    // Intentar reparar JSON truncado
-    const opens  = (cleaned.match(/\[/g) || []).length - (cleaned.match(/\]/g) || []).length;
-    const bracks = (cleaned.match(/\{/g) || []).length - (cleaned.match(/\}/g) || []).length;
-    let repaired = cleaned.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "").replace(/,\s*$/, "");
-    for (let i = 0; i < opens;  i++) repaired += "]";
-    for (let i = 0; i < bracks; i++) repaired += "}";
-    try { return JSON.parse(repaired); } catch { /* continue */ }
     throw new Error("Respuesta del agente keywords no es JSON válido");
   }
 }
@@ -220,15 +209,10 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
-  const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
-    const attempts = [cleaned + '"]}', cleaned + '"}', cleaned + '}'];
-    for (const attempt of attempts) {
-      try { return JSON.parse(attempt); } catch { /* continue */ }
-    }
     throw new Error("Respuesta del agente CRO no es JSON válido");
   }
 }
@@ -276,15 +260,10 @@ El "text" debe ser texto markdown real que se insertará directamente en el art�
 **Artículo:**
 ${articulo.slice(0, 3500)}`;
 
-  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048 });
-  const cleaned = raw.replace(/^```json?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const raw = await callAI({ provider, tier: "fast", systemPrompt, userPrompt, maxTokens: 2048, cacheSystem: true });
   try {
-    return JSON.parse(cleaned);
+    return parseLLMJson(raw);
   } catch {
-    const attempts = [cleaned + '"]}', cleaned + '"}', cleaned + '}'];
-    for (const attempt of attempts) {
-      try { return JSON.parse(attempt); } catch { /* continue */ }
-    }
     throw new Error("Respuesta del agente Landing no es JSON válido");
   }
 }
@@ -296,11 +275,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { articulo, tema, keywords, categoria, provider = "anthropic" } = req.body;
-
-  if (!articulo || !tema) {
-    return res.status(400).json({ error: "articulo y tema son obligatorios" });
+  const validationError = validateBody(req.body, {
+    articulo: { required: true, max: MAX.articulo },
+    tema: { required: true, max: MAX.tema },
+    keywords: { max: MAX.keywords },
+    categoria: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { articulo, tema, keywords, categoria, provider = "anthropic" } = req.body;
 
   const ctx = loadAgentContext();
 

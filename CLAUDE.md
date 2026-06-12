@@ -14,14 +14,15 @@ El proyecto combina:
 
 ## Stack Técnico
 
-- **Framework**: Next.js 14 (Pages Router)
-- **Despliegue**: Vercel
-- **Storage**: Vercel KV (Redis)
-- **IA Generación**: Anthropic Claude API (@anthropic-ai/sdk)
-- **Imágenes**: OpenAI gpt-image-1
+- **Framework**: Next.js 14 (Pages Router) + SWR en el cliente
+- **Despliegue**: Vercel (cron diario de autopublicación a las 9:00)
+- **Storage**: Vercel KV (Redis) — hash de metadatos por colección, sin N+1
+- **IA Generación**: Anthropic Claude (tiers main/analysis/fast, prompt caching, streaming SSE) con OpenAI como proveedor alternativo
+- **Imágenes**: OpenAI gpt-image-1 (una request por imagen; al publicar se suben a la media library de WP)
 - **Datos SEO**: Google Search Console (Service Account)
 - **E-commerce**: Prestashop API (catálogo productos)
 - **Keywords**: Google Sheets API
+- **Tests**: Vitest (`npm test`) — cobertura de toda `lib/`
 
 ## Comandos Disponibles
 
@@ -30,22 +31,14 @@ Todos los comandos están en `.claude/commands/` y se invocan como slash command
 ### Investigación
 - `/research [tema]` — Investigación SEO completa: keywords, competencia, gaps, brief
 - `/cluster [tema]` — Estrategia de cluster temático: pillar page + artículos soporte + mapa de enlaces
-- `/priorities` — Matriz de priorización de contenido basada en datos GSC
-- `/research-serp [tema]` — Análisis SERP para un tema específico
 
 ### Creación
 - `/write [tema]` — Crear artículo completo optimizado para SEO (2000+ palabras)
 - `/article [tema]` — Pipeline completo: research → plan → escritura → optimización
-- `/rewrite [tema]` — Actualizar y mejorar contenido existente
 
 ### Optimización
 - `/optimize [archivo]` — Revisión SEO final antes de publicación
 - `/analyze-existing [URL]` — Auditoría de contenido existente
-- `/scrub [archivo]` — Limpiar marcas invisibles de IA del contenido
-- `/performance-review` — Análisis de rendimiento con datos de analytics
-
-### Planificación
-- `/content-calendar [posts/semana]` — Calendario editorial mensual
 
 ## Arquitectura: Modelo Command → Agent
 
@@ -103,9 +96,17 @@ Otros agentes disponibles:
 - Usado por: contexto de productos en artículos
 
 ### Vercel KV (ya configurado)
-- Almacena historial de artículos generados
-- Índice: `articles:index` → lista de IDs
-- Registros: `article:{timestamp}` → metadatos del artículo
+- Almacena historial de artículos generados, programados y posts de WP sincronizados
+- Acceso SIEMPRE vía `lib/article-store.js` (hash de metadatos `articles:meta`,
+  `scheduled:meta`, `wp:posts:meta` leídos con un solo comando; los registros
+  completos viven en claves sueltas `article:{timestamp}`)
+- El formato antiguo (índice + clave por artículo) se mantiene escrito por
+  compatibilidad; la migración al hash es perezosa
+
+### Cron de autopublicación
+- `/api/cron/publish` diario a las 9:00 (vercel.json)
+- El middleware deja pasar `/api/cron/*` sin cookie; el handler EXIGE
+  `CRON_SECRET` (sin él responde 503 y no publica)
 
 ## Archivos de Contexto
 
@@ -146,11 +147,25 @@ El flujo de trabajo es:
 - Longitud artículos estándar: 700-1.100 palabras (blog)
 - Longitud artículos SEO profundos: 1.500-3.000 palabras (vía comandos)
 
+## Estructura del código
+
+- `pages/index.js` — orquestador del dashboard (solo estado + composición)
+- `components/` — paneles de UI; `hooks/useDashboardData.js` — datos con SWR
+- `lib/` — núcleo compartido: `ai-client` (callAI/callAIStream + prompt caching),
+  `llm-json` (parser único de respuestas LLM), `article-store` (KV),
+  `article-editor` (manipulación pura del markdown), `markdown-to-html` (WP) vs
+  `markdown-preview` (dashboard), `wp-media` (imágenes a la media library),
+  `google-auth`, `prestashop`, `validate`, `edge-auth`/`cron-auth`, `ai-cost`
+- Convención: las llamadas a LLM SIEMPRE pasan por `callAI`/`callAIStream` y su
+  salida JSON SIEMPRE se parsea con `parseLLMJson`
+
 ## Desarrollo
 
 ```bash
 npm run dev    # Servidor de desarrollo
+npm test       # Tests (Vitest) — ejecutar antes de commitear
 npm run build  # Build de producción
 ```
 
-Variables de entorno necesarias: ver `.env.example`
+Variables de entorno necesarias: ver `.env.example`. En producción la app es
+fail-closed: sin `AUTH_PASSWORD` se deniega todo; sin `CRON_SECRET` el cron no publica.

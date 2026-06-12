@@ -1,7 +1,13 @@
-import { kv } from "@vercel/kv";
-import { callAI } from "../../lib/ai-client";
+import { callAI, callAIStream } from "../../lib/ai-client";
+import { estimateCost } from "../../lib/ai-cost";
 import { extractSlug, extractTitle } from "../../lib/article-utils";
+import { getArticlesMeta, saveArticleRecord } from "../../lib/article-store";
 import { loadGenerationContext, buildContextBlock } from "../../lib/context-loader";
+import { validateBody, MAX } from "../../lib/validate";
+
+// La generación con el modelo principal puede tardar más de un minuto.
+// supportsResponseStreaming permite la respuesta SSE en Vercel.
+export const config = { maxDuration: 60, supportsResponseStreaming: true };
 
 // ─── Helpers KV ─────────────────────────────────────────────────────────────
 
@@ -17,10 +23,7 @@ async function saveArticle(tema, categoria, text) {
       slug: extractSlug(text),
       fecha: new Date().toISOString().split("T")[0], // YYYY-MM-DD
     };
-    // Guardamos el registro individual
-    await kv.set(id, JSON.stringify(entry));
-    // Añadimos el id al índice general (lista ordenada por fecha)
-    await kv.lpush("articles:index", id);
+    await saveArticleRecord(entry);
     return entry;
   } catch (err) {
     // Si KV falla no rompemos la generación, solo logueamos
@@ -29,16 +32,11 @@ async function saveArticle(tema, categoria, text) {
   }
 }
 
-// Recupera todos los artículos del índice para pasarlos al prompt
+// Recupera los metadatos del historial para el prompt (un solo comando KV)
 async function getArticleHistory() {
   try {
-    const ids = await kv.lrange("articles:index", 0, -1); // todos
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r))
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes primero
+    const metas = await getArticlesMeta();
+    return metas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // más recientes primero
   } catch (err) {
     console.error("KV fetch error:", err);
     return [];
@@ -80,38 +78,41 @@ Al final del artículo (después de una línea ---), añade un bloque con:
 
 IMPORTANTE: Responde ÚNICAMENTE con el artículo en formato Markdown. Sin explicaciones previas ni comentarios.`;
 
-// Construye el system prompt completo:
-// 1. Rol + intro
-// 2. Documentos de contexto reales (brand-voice, seo, links, style)
-// 3. Estructura y adaptaciones
-// 4. Historial de artículos publicados (anti-duplicados)
-function buildSystemPrompt(history, contextBlock) {
-  const parts = [ROLE_INTRO];
+// Máximo de artículos del historial que se inyectan en el prompt.
+// Sin límite, el prompt crecía sin tope con la vida del blog (coste + latencia).
+const HISTORY_PROMPT_LIMIT = 100;
 
+// Bloque ESTÁTICO del system prompt: rol + documentos de contexto + estructura.
+// Es idéntico entre llamadas → se marca cacheable (prompt caching de Anthropic).
+function buildStaticSystemBlock(contextBlock) {
+  const parts = [ROLE_INTRO];
   if (contextBlock) {
     parts.push(`\n\n# DOCUMENTOS DE REFERENCIA OBLIGATORIA\n\n${contextBlock}`);
   }
-
   parts.push(SECTIONS_AND_STRUCTURE);
+  return parts.join("");
+}
 
-  if (history && history.length > 0) {
-    const historialTexto = history
-      .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
-      .join("\n");
+// Bloque VARIABLE: historial de artículos publicados (anti-duplicados).
+// Limitado a los más recientes — los antiguos aportan poco para evitar repetir.
+function buildHistoryBlock(history) {
+  if (!history || history.length === 0) return null;
 
-    parts.push(`\n\nHISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
-A continuación se listan todos los artículos que ya existen en el blog. Debes tenerlos en cuenta para:
+  const shown = history.slice(0, HISTORY_PROMPT_LIMIT);
+  const historialTexto = shown
+    .map((a, i) => `${i + 1}. [${a.fecha}] "${a.titulo}" — Categoría: ${a.categoria}${a.slug ? ` — Slug: ${a.slug}` : ""}`)
+    .join("\n");
+
+  return `HISTORIAL DE ARTÍCULOS YA PUBLICADOS — MUY IMPORTANTE:
+A continuación se listan los artículos más recientes del blog. Debes tenerlos en cuenta para:
 1. NO repetir temas ya cubiertos — aborda el tema desde un ángulo diferente o más específico.
 2. NO repetir el mismo enfoque o estructura que artículos previos de la misma categoría.
 3. Puedes hacer referencias internas a artículos existentes usando el slug como ruta del enlace.
 
-ARTÍCULOS EXISTENTES (${history.length} en total):
+ARTÍCULOS EXISTENTES (${shown.length} más recientes de ${history.length} en total):
 ${historialTexto}
 
-Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`);
-  }
-
-  return parts.join("");
+Teniendo en cuenta este historial, genera el nuevo artículo con un enfoque fresco y diferenciado.`;
 }
 
 // ─── Handler principal ───────────────────────────────────────────────────────
@@ -121,11 +122,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlCategoriaPrestashop, nombreCategoriaPrestashop, provider = "anthropic" } = req.body;
-
-  if (!tema || !categoria) {
-    return res.status(400).json({ error: "Tema y categoría son obligatorios" });
+  const validationError = validateBody(req.body, {
+    tema: { required: true, max: MAX.tema },
+    categoria: { required: true, max: MAX.corto },
+    keywords: { max: MAX.keywords },
+    tono: { max: MAX.corto },
+    contexto: { max: MAX.contexto },
+    publico: { max: MAX.corto },
+    longitud: { max: MAX.corto },
+    intencion: { max: MAX.corto },
+  });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
+
+  const { tema, categoria, keywords, tono, contexto, researchData, publico, longitud, intencion, urlCategoriaPrestashop, nombreCategoriaPrestashop, provider = "anthropic" } = req.body;
 
   if (provider === "openai" && !process.env.OPENAI_API_KEY) {
     return res.status(500).json({ error: "OPENAI_API_KEY no configurada en el servidor" });
@@ -137,10 +148,16 @@ export default async function handler(req, res) {
   // 1. Recuperar historial de KV (no bloquea si falla)
   const history = await getArticleHistory();
 
-  // 2. Cargar contexto de marca desde /context/ e inyectarlo en el system prompt
+  // 2. Cargar contexto de marca desde /context/ e inyectarlo en el system prompt.
+  // El bloque estático (rol + contexto + estructura) va cacheado; el historial
+  // cambia con cada artículo guardado y va en un bloque aparte sin cachear.
   const contextFiles = loadGenerationContext();
   const contextBlock = buildContextBlock(contextFiles);
-  const systemPrompt = buildSystemPrompt(history, contextBlock);
+  const historyBlock = buildHistoryBlock(history);
+  const systemPrompt = [
+    { text: buildStaticSystemBlock(contextBlock), cache: true },
+    ...(historyBlock ? [{ text: historyBlock }] : []),
+  ];
 
   const userPrompt = `Escribe un artículo de blog para Ferrolan con las siguientes características:
 
@@ -167,8 +184,38 @@ IMPORTANTE: Usa esta investigación para crear un artículo que cubra los gaps i
 
 Genera el artículo completo siguiendo todas las instrucciones de estilo editorial. Recuerda consultar el historial de artículos existentes para asegurarte de que el enfoque es nuevo y diferenciado.`;
 
+  // 4096 tokens: un artículo "Largo" (~1200 palabras) + bloque meta ronda los
+  // 2000-2400 tokens en castellano; con 2048 se truncaba a media frase.
+
+  // ── Modo streaming (SSE): el dashboard pinta el artículo según se escribe ──
+  if (req.body.stream === true) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    });
+    const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+    try {
+      let usage = null;
+      for await (const delta of callAIStream({
+        provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096,
+        onUsage: (u) => { usage = u; },
+      })) {
+        send({ delta });
+      }
+      const cost = usage ? estimateCost(usage) : null;
+      send({ done: true, historialCount: history.length, usage, cost });
+    } catch (err) {
+      console.error("AI generation error (stream):", err);
+      send({ error: "Error al generar el artículo. Inténtalo de nuevo." });
+    }
+    return res.end();
+  }
+
+  // ── Modo clásico (JSON completo) ──
   try {
-    const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 2048 });
+    const text = await callAI({ provider, tier: "main", systemPrompt, userPrompt, maxTokens: 4096 });
 
     return res.status(200).json({
       articulo: text,

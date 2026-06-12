@@ -1,7 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { kv } from "@vercel/kv";
+import { kv } from "../../lib/kv";
 import { google } from "googleapis";
+import { callAI } from "../../lib/ai-client";
+import { parseLLMJson } from "../../lib/llm-json";
+import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
+import { fetchPrestashopCategoriesRaw } from "../../lib/prestashop";
+import { getArticlesMeta, getWpPostsMeta } from "../../lib/article-store";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
+
+// Prestashop + GSC + WordPress + análisis con Claude en una sola request
+export const config = { maxDuration: 60 };
 
 // Nivel de coincidencia para "ya cubierto": exacta/contenida + solapamiento ≥60%.
 const COVERAGE_LEVEL = "balanced";
@@ -12,40 +19,13 @@ const EXCLUDED_CATEGORY_TREES = [16, 9498, 3554, 8186, 11699];
 const EXCLUDED_CATEGORIES = [2735]; // Grifería parent excluded but child 2745 kept
 const KEPT_CHILDREN = [2745]; // Children to keep despite parent exclusion
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getGoogleAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
-  if (!email || !key) return null;
-  return new google.auth.JWT(email, null, key.replace(/\\n/g, "\n"), [
-    "https://www.googleapis.com/auth/webmasters.readonly",
-    "https://www.googleapis.com/auth/spreadsheets",
-  ]);
-}
-
 // ─── Prestashop: fetch and filter categories ────────────────────────────────
 
 async function fetchPrestashopCategories() {
-  const apiUrl = process.env.PRESTASHOP_API_URL || "https://ferrolan.es/api";
-  const apiKey = process.env.PRESTASHOP_API_KEY;
+  const rawCats = await fetchPrestashopCategoriesRaw();
+  if (!rawCats) return null;
 
-  if (!apiKey) return null;
-
-  const url = `${apiUrl}/categories?output_format=JSON&display=[id,name,id_parent,active,level_depth]&limit=500`;
-
-  const res = await fetch(url, {
-    headers: {
-      Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64"),
-    },
-  });
-
-  if (!res.ok) throw new Error(`Prestashop API error: ${res.status}`);
-
-  const data = await res.json();
-  const allCats = (data.categories || []).filter(
-    (c) => c.active === "1" && c.name && c.level_depth >= 2
-  );
+  const allCats = rawCats.filter((c) => c.name && c.level_depth >= 2);
 
   // Build set of all IDs to exclude (tree traversal for EXCLUDED_CATEGORY_TREES)
   const excludedIds = new Set();
@@ -98,31 +78,19 @@ async function fetchPrestashopCategories() {
   }));
 }
 
-// ─── KV: get published articles ─────────────────────────────────────────────
+// ─── KV: artículos y posts de WP (hash de metadatos, 1 comando) ─────────────
 
 async function getArticleHistory() {
   try {
-    const ids = await kv.lrange("articles:index", 0, -1);
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(id)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+    return await getArticlesMeta();
   } catch {
     return [];
   }
 }
 
-// ─── KV: get synced WordPress posts ─────────────────────────────────────────
-
 async function getWordPressPosts() {
   try {
-    const ids = await kv.lrange("wp:posts:index", 0, -1);
-    if (!ids || ids.length === 0) return [];
-    const records = await Promise.all(ids.map((id) => kv.get(`wp:post:${id}`)));
-    return records
-      .filter(Boolean)
-      .map((r) => (typeof r === "string" ? JSON.parse(r) : r));
+    return await getWpPostsMeta();
   } catch {
     return [];
   }
@@ -264,58 +232,25 @@ Para cada keyword incluye:
 Responde SOLO con JSON válido, sin explicaciones ni markdown. El formato debe ser:
 {"keywords": [...]}`;
 
-  const client = new Anthropic({ apiKey });
-
+  let text;
   try {
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
+    text = await callAI({
+      provider: "anthropic",
+      tier: "analysis",
+      systemPrompt: "Eres un experto SEO. Respondes únicamente con JSON válido.",
+      userPrompt: prompt,
+      maxTokens: 4096,
     });
-
-    const text = message.content[0]?.text || "";
-
-    // Parse JSON — handle various Claude response formats
-    try {
-      // Remove markdown fences, leading/trailing whitespace
-      let cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      // If Claude added any text before the JSON, find the first {
-      const jsonStart = cleaned.indexOf("{");
-      if (jsonStart > 0) cleaned = cleaned.slice(jsonStart);
-      // Find last }
-      const jsonEnd = cleaned.lastIndexOf("}");
-      if (jsonEnd > 0) cleaned = cleaned.slice(0, jsonEnd + 1);
-
-      // Try to parse as-is
-      try {
-        return JSON.parse(cleaned);
-      } catch {
-        // If truncated, try to close the JSON gracefully
-        // Count open brackets to repair
-        let repaired = cleaned;
-        const openBrackets = (repaired.match(/\[/g) || []).length;
-        const closeBrackets = (repaired.match(/\]/g) || []).length;
-        const openBraces = (repaired.match(/\{/g) || []).length;
-        const closeBraces = (repaired.match(/\}/g) || []).length;
-
-        // Remove trailing comma or partial field
-        repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "");
-        repaired = repaired.replace(/,\s*$/, "");
-
-        // Close missing brackets/braces
-        for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
-        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
-        if (!repaired.endsWith("}")) repaired += "}";
-
-        return JSON.parse(repaired);
-      }
-    } catch (parseErr) {
-      console.error("JSON parse error:", parseErr.message, "Raw (first 300):", text.slice(0, 300));
-      return { keywords: [], _parseError: true, _raw: text.slice(0, 200) };
-    }
   } catch (apiErr) {
     console.error("Anthropic API error:", apiErr.message);
-    return { keywords: [], _apiError: apiErr.message };
+    return { keywords: [], _apiError: true };
+  }
+
+  try {
+    return parseLLMJson(text);
+  } catch (parseErr) {
+    console.error("JSON parse error:", parseErr.message, "Raw (first 300):", text.slice(0, 300));
+    return { keywords: [], _parseError: true };
   }
 }
 
@@ -407,7 +342,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const googleAuth = getGoogleAuth();
+    const googleAuth = getGoogleAuth([SCOPES.searchConsole, SCOPES.sheets]);
 
     // Fetch all data in parallel (incluye posts de WordPress sincronizados)
     const [categories, articles, gscQueries, wpPosts] = await Promise.all([
@@ -429,9 +364,9 @@ export default async function handler(req, res) {
 
     if (!result || !result.keywords || result.keywords.length === 0) {
       const detail = result?._apiError
-        ? `Error API Claude: ${result._apiError}`
+        ? "Error llamando a la API de Claude. Inténtalo de nuevo."
         : result?._parseError
-        ? `Error parseando respuesta de Claude: ${result._raw || "sin datos"}`
+        ? "La respuesta de Claude no se pudo procesar. Inténtalo de nuevo."
         : "Error generando keywords con Claude.";
       return res.status(200).json({
         configured: true,
@@ -488,7 +423,7 @@ export default async function handler(req, res) {
     console.error("Keywords data error:", err);
     return res.status(200).json({
       configured: true,
-      error: err.message,
+      error: "Error generando los datos de keywords. Inténtalo de nuevo.",
     });
   }
 }
