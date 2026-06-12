@@ -31,7 +31,7 @@ Variables de entorno: ver [.env.example](.env.example). Las imprescindibles:
 | `OPENAI_API_KEY` | Imágenes (gpt-image-1) y proveedor alternativo de chat. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Vercel KV (se configuran al vincular el store). |
 
-Opcionales: `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` + `GSC_SITE_URL` (GSC en vivo y panel de rendimiento), `GOOGLE_SHEETS_ID` (programación), `KEYWORDS_SHEET_ID`, `PRESTASHOP_API_KEY` + `PRESTASHOP_API_URL`, `WORDPRESS_URL` + `WORDPRESS_USER` + `WORDPRESS_APP_PASSWORD`.
+Opcionales: `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` + `GSC_SITE_URL` (GSC en vivo y panel de rendimiento), `GOOGLE_SHEETS_ID` (programación), `KEYWORDS_SHEET_ID`, `PRESTASHOP_API_KEY` + `PRESTASHOP_API_URL`, `WORDPRESS_URL` + `WORDPRESS_USER` + `WORDPRESS_APP_PASSWORD`, y para el resumen quincenal por email: `SMTP_USER` + `SMTP_PASS` (+ `SMTP_HOST`/`SMTP_PORT` y `DIGEST_EMAIL_FROM` opcionales) + `DIGEST_EMAIL_TO`.
 
 ## Arquitectura
 
@@ -85,6 +85,7 @@ tests/                  Vitest — 100 tests de lib/
 ## Notas operativas
 
 - El cron de autopublicación corre a diario a las 9:00 ([vercel.json](vercel.json)). **Requiere `CRON_SECRET`**: sin él, el endpoint responde 503 y no publica.
+- El **resumen quincenal** (`/api/cron/article-digest`, días 1 y 16 a las 8:00) genera 2 propuestas de artículo + informe de metadatos/keywords y las envía por email (SMTP). Requiere `CRON_SECRET` + `SMTP_USER`/`SMTP_PASS` + `DIGEST_EMAIL_TO`; sin email configurado responde 503. Lógica de generación compartida con el dashboard en [lib/article-generator.js](lib/article-generator.js).
 - Acceso a KV centralizado en [lib/kv.js](lib/kv.js) (cliente `@upstash/redis` que lee las variables `KV_REST_API_URL` / `KV_REST_API_TOKEN` ya existentes — mismo store, sin cambios en Vercel). Se migró desde el `@vercel/kv` deprecado.
 - `npm audit`: las advisories restantes de `next` requieren saltar a Next 16 (breaking) y afectan a App Router/self-hosted, que este proyecto no usa.
 - Precios de los modelos para el medidor de coste: [lib/ai-cost.js](lib/ai-cost.js) (actualizar la tabla cuando cambien las tarifas).
