@@ -85,6 +85,6 @@ tests/                  Vitest — 100 tests de lib/
 ## Notas operativas
 
 - El cron de autopublicación corre a diario a las 9:00 ([vercel.json](vercel.json)). **Requiere `CRON_SECRET`**: sin él, el endpoint responde 503 y no publica.
-- `@vercel/kv` está deprecado por Vercel a favor del marketplace de Upstash Redis; los stores existentes siguen funcionando. Migrar el cliente cuando toque (la API es compatible).
+- Acceso a KV centralizado en [lib/kv.js](lib/kv.js) (cliente `@upstash/redis` que lee las variables `KV_REST_API_URL` / `KV_REST_API_TOKEN` ya existentes — mismo store, sin cambios en Vercel). Se migró desde el `@vercel/kv` deprecado.
 - `npm audit`: las advisories restantes de `next` requieren saltar a Next 16 (breaking) y afectan a App Router/self-hosted, que este proyecto no usa.
 - Precios de los modelos para el medidor de coste: [lib/ai-cost.js](lib/ai-cost.js) (actualizar la tabla cuando cambien las tarifas).

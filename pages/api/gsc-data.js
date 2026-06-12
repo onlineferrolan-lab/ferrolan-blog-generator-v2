@@ -5,7 +5,7 @@
 // Si no → datos estáticos del último análisis manual.
 
 import { google } from "googleapis";
-import { kv } from "@vercel/kv";
+import { kv } from "../../lib/kv";
 import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
 import { loadCoverageIndex, annotateCoverage } from "../../lib/coverage";
 

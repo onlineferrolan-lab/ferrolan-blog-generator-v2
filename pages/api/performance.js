@@ -8,7 +8,7 @@
 // Caché KV de 6h; ?refresh=true fuerza datos frescos.
 
 import { google } from "googleapis";
-import { kv } from "@vercel/kv";
+import { kv } from "../../lib/kv";
 import { getGoogleAuth, SCOPES } from "../../lib/google-auth";
 import { getArticlesMeta } from "../../lib/article-store";
 

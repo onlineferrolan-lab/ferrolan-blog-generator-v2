@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "../../lib/kv";
 import { google } from "googleapis";
 import { callAI } from "../../lib/ai-client";
 import { parseLLMJson } from "../../lib/llm-json";

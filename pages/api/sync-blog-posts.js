@@ -1,4 +1,4 @@
-import { kv } from "@vercel/kv";
+import { kv } from "../../lib/kv";
 import { replaceWpPosts } from "../../lib/article-store";
 
 // ─── Sync Blog Posts API ──────────────────────────────────────────────────────

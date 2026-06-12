@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
-    "@vercel/kv": "^2.0.0",
+    "@upstash/redis": "^1.38.0",
     "googleapis": "^173.0.0",
     "next": "^14.2.35",
     "openai": "^6.33.0",
