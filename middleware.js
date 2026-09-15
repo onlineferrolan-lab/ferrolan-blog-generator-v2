@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import {
   isPublicPath,
   isStaticAsset,
+  verifyAgentRequest,
   computeToken,
-  timingSafeEqualStr,
 } from "./lib/edge-auth";
 
 // ─── Auth Middleware ────────────────────────────────────────────────────────
@@ -22,6 +22,16 @@ export async function middleware(request) {
 
   if (isPublicPath(pathname) || isStaticAsset(pathname)) {
     return NextResponse.next();
+  }
+
+  // Token de servicio de alcance mínimo para Quique. Si llega un Bearer,
+  // nunca cae al acceso por cookie: se valida aquí y falla cerrado.
+  const authorization = request.headers.get("authorization") || "";
+  const agentAuth = verifyAgentRequest(pathname, authorization, process.env.AGENT_TOKEN);
+  if (agentAuth.present) {
+    return agentAuth.ok
+      ? NextResponse.next()
+      : jsonError(agentAuth.error, agentAuth.status);
   }
 
   const password = process.env.AUTH_PASSWORD;
@@ -74,6 +84,13 @@ function redirectToLogin(request) {
   // For pages, redirect to login
   const loginUrl = new URL("/login", request.url);
   return NextResponse.redirect(loginUrl);
+}
+
+function jsonError(error, status) {
+  return new NextResponse(JSON.stringify({ error }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export const config = {
