@@ -26,6 +26,7 @@ Variables de entorno: ver [.env.example](.env.example). Las imprescindibles:
 | Variable | Para qué |
 |---|---|
 | `AUTH_PASSWORD` | Acceso a la app. **Sin ella, en producción se deniega todo** (fail-closed). |
+| `AGENT_TOKEN` | Acceso de servicio de Quique, con alcance limitado a generar, comprobar keywords y sincronizar el archivo publicado. Mínimo 32 caracteres. |
 | `CRON_SECRET` | **Obligatoria** para la autopublicación (`/api/cron/publish`). Vercel la envía como Bearer automáticamente. |
 | `ANTHROPIC_API_KEY` | Generación de artículos y agentes. |
 | `OPENAI_API_KEY` | Imágenes (gpt-image-1) y proveedor alternativo de chat. |
@@ -71,6 +72,11 @@ context/                Guías de marca inyectadas en los prompts
                         agents/ se cargan también en runtime como system prompts
 tests/                  Vitest — 100 tests de lib/
 ```
+
+El token `AGENT_TOKEN` no sustituye la sesión del dashboard. Solo acepta
+`Authorization: Bearer ...` en `/api/generate`, `/api/check-keyword` y
+`/api/sync-blog-posts`; cualquier intento de usarlo para publicar, programar,
+generar imágenes o investigar se rechaza antes de llegar al endpoint.
 
 ## Flujo de publicación
 

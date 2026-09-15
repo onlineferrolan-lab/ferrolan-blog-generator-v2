@@ -3,6 +3,8 @@ import crypto from "crypto";
 import {
   isPublicPath,
   isStaticAsset,
+  isAgentPath,
+  verifyAgentRequest,
   computeToken,
   timingSafeEqualStr,
 } from "../lib/edge-auth";
@@ -23,6 +25,43 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/api/articles")).toBe(false);
     expect(isPublicPath("/api/generate")).toBe(false);
     expect(isPublicPath("/api/generate-images")).toBe(false);
+  });
+});
+
+describe("isAgentPath", () => {
+  it("limita Quique a generación, anti-duplicados y sincronización", () => {
+    expect(isAgentPath("/api/generate")).toBe(true);
+    expect(isAgentPath("/api/check-keyword")).toBe(true);
+    expect(isAgentPath("/api/sync-blog-posts/")).toBe(true);
+  });
+
+  it("no permite publicar, programar, generar imágenes ni investigar", () => {
+    expect(isAgentPath("/api/publish-now")).toBe(false);
+    expect(isAgentPath("/api/schedule-article")).toBe(false);
+    expect(isAgentPath("/api/generate-images")).toBe(false);
+    expect(isAgentPath("/api/research")).toBe(false);
+    expect(isAgentPath("/api/cron/publish")).toBe(false);
+  });
+});
+
+describe("verifyAgentRequest", () => {
+  const token = "a".repeat(32);
+
+  it("deja el flujo de cookie intacto cuando no hay Bearer", () => {
+    expect(verifyAgentRequest("/api/generate", undefined, token)).toEqual({ present: false });
+  });
+
+  it("acepta el token correcto solo en una ruta permitida", () => {
+    expect(verifyAgentRequest("/api/generate", `Bearer ${token}`, token)).toEqual({
+      present: true,
+      ok: true,
+    });
+  });
+
+  it("falla cerrado para ruta, token o configuración no válidos", () => {
+    expect(verifyAgentRequest("/api/publish-now", `Bearer ${token}`, token).status).toBe(403);
+    expect(verifyAgentRequest("/api/generate", "Bearer incorrecto", token).status).toBe(401);
+    expect(verifyAgentRequest("/api/generate", `Bearer ${token}`, "corto").status).toBe(503);
   });
 });
 
