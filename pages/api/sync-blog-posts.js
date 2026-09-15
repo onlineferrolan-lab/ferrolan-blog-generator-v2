@@ -17,9 +17,13 @@ const WP_POSTS_INDEX = "wp:posts:index";
 const WP_SYNC_META = "wp:sync:meta";
 
 function getWpAuth() {
-  const url = process.env.WORDPRESS_URL;
-  const user = process.env.WORDPRESS_USER;
-  const pass = process.env.WORDPRESS_APP_PASSWORD;
+  // La sincronización de Quique usa su cuenta limitada y aislada. Los nombres
+  // históricos siguen disponibles como fallback para despliegues anteriores.
+  const url = process.env.QUIQUE_WORDPRESS_URL || process.env.WORDPRESS_URL;
+  const user = process.env.QUIQUE_WORDPRESS_USER || process.env.WORDPRESS_USER;
+  const pass =
+    process.env.QUIQUE_WORDPRESS_APP_PASSWORD ||
+    process.env.WORDPRESS_APP_PASSWORD;
   if (!url || !user || !pass) return null;
   return {
     baseUrl: url.replace(/\/$/, ""),
